@@ -1,0 +1,185 @@
+# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+# SPDX-License-Identifier: MIT
+
+"""Integration tests for graph execution (requires GPU)."""
+
+import json
+from pathlib import Path
+from typing import Any, Dict
+
+import pytest
+
+from dnn_benchmarking.config import BenchmarkConfig
+from dnn_benchmarking.execution import BufferManager, Executor
+from dnn_benchmarking.graph import GraphLoader
+
+
+@pytest.mark.gpu
+class TestExecution:
+    """Integration tests for graph execution requiring GPU."""
+
+    @pytest.fixture
+    def hipdnn(self):
+        """Get hipdnn_frontend module or skip if not available."""
+        try:
+            import hipdnn_frontend
+
+            # Test that we can create a handle (requires GPU)
+            hipdnn_frontend.Handle()
+            return hipdnn_frontend
+        except Exception as e:
+            pytest.skip(f"hipdnn_frontend not available or no GPU: {e}")
+
+    def test_executor_prepare(
+        self, hipdnn, sample_conv_fwd_json: Dict[str, Any]
+    ) -> None:
+        """Test that executor can prepare a graph."""
+        config = BenchmarkConfig(
+            graph_path=Path("/test/graph.json"),
+            warmup_iters=1,
+            benchmark_iters=1,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(sample_conv_fwd_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        assert executor.init_time_ms > 0
+        assert executor.graph is not None
+
+    def test_buffer_manager_allocate(
+        self, hipdnn, sample_conv_fwd_json: Dict[str, Any]
+    ) -> None:
+        """Test buffer allocation."""
+        loader = GraphLoader()
+        tensor_infos = loader.extract_tensor_info(sample_conv_fwd_json)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            variant_pack = buffer_manager.create_variant_pack()
+
+            # Should have 3 tensors
+            assert len(variant_pack) == 3
+
+            # All pointers should be non-zero
+            for uid, ptr in variant_pack.items():
+                assert ptr != 0, f"Buffer for UID {uid} has null pointer"
+
+    def test_buffer_manager_fill_random(
+        self, hipdnn, sample_conv_fwd_json: Dict[str, Any]
+    ) -> None:
+        """Test filling buffers with random data."""
+        loader = GraphLoader()
+        tensor_infos = loader.extract_tensor_info(sample_conv_fwd_json)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+
+            # Check that input data was stored
+            input_data = buffer_manager.get_input_data(1)
+            assert input_data is not None
+            assert input_data.shape == (16, 16, 16, 16)
+
+    def test_full_execution_workflow(
+        self, hipdnn, sample_conv_fwd_json: Dict[str, Any]
+    ) -> None:
+        """Test complete execution workflow: prepare, warmup, benchmark."""
+        loader = GraphLoader()
+        tensor_infos = loader.extract_tensor_info(sample_conv_fwd_json)
+
+        config = BenchmarkConfig(
+            graph_path=Path("/test/graph.json"),
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(sample_conv_fwd_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+
+            # Warmup
+            executor.warmup(handle, variant_pack)
+
+            # Benchmark
+            timings = executor.benchmark(handle, variant_pack)
+
+            # Should have 5 timing values
+            assert len(timings) == 5
+
+            # All timings should be positive
+            for t in timings:
+                assert t > 0
+
+            # Get output data (uid=0 for output tensor)
+            output_data = buffer_manager.get_output_data(0)
+            assert output_data is not None
+            assert output_data.shape == (16, 16, 16, 16)
+
+            # Output should not be all zeros after execution
+            import numpy as np
+
+            assert not np.allclose(output_data, 0)
+
+
+@pytest.mark.gpu
+class TestExecutionErrors:
+    """Tests for execution error handling."""
+
+    @pytest.fixture
+    def hipdnn(self):
+        """Get hipdnn_frontend module or skip if not available."""
+        try:
+            import hipdnn_frontend
+
+            hipdnn_frontend.Handle()
+            return hipdnn_frontend
+        except Exception as e:
+            pytest.skip(f"hipdnn_frontend not available or no GPU: {e}")
+
+    def test_execute_without_prepare_raises(
+        self, hipdnn, sample_conv_fwd_json: Dict[str, Any]
+    ) -> None:
+        """Test that executing without prepare raises error."""
+        from dnn_benchmarking.common.exceptions import ExecutionError
+
+        config = BenchmarkConfig(
+            graph_path=Path("/test/graph.json"),
+            warmup_iters=1,
+            benchmark_iters=1,
+        )
+
+        graph_json_str = json.dumps(sample_conv_fwd_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+
+        with pytest.raises(ExecutionError, match="not prepared"):
+            executor.warmup(handle, {})
+
+    def test_variant_pack_without_allocate_raises(
+        self, sample_conv_fwd_json: Dict[str, Any]
+    ) -> None:
+        """Test that creating variant pack without allocation raises error."""
+        from dnn_benchmarking.common.exceptions import ExecutionError
+
+        loader = GraphLoader()
+        tensor_infos = loader.extract_tensor_info(sample_conv_fwd_json)
+
+        buffer_manager = BufferManager(tensor_infos)
+
+        with pytest.raises(ExecutionError, match="not allocated"):
+            buffer_manager.create_variant_pack()
