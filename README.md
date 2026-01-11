@@ -166,8 +166,23 @@ pytest tests/unit
 pytest -m "not gpu"
 ```
 
+## Supported Operations
+
+The benchmark tool supports any valid hipDNN graph operation, including:
+
+- **Convolution**: Forward, Data Gradient, Weight Gradient
+- **Matrix Multiplication**: Standard matmul operations
+- **Pointwise**: Activations (ReLU, Sigmoid, Tanh, etc.) and element-wise operations (Add, Mul, etc.)
+- **Batch Normalization**: Training and inference modes
+
+Sample graphs are provided in the `graphs/` directory:
+- `sample_conv_fwd.json` - Convolution forward (16x16x16x16, k=16, 3x3)
+- `sample_matmul.json` - Matrix multiplication (256x512 × 512x1024)
+- `sample_relu.json` - ReLU activation (64x128x56x56)
+- `sample_add.json` - Element-wise addition (128x256x14x14)
+- `sample_batchnorm.json` - Batch normalization inference (32x64x28x28)
+
 ## Limitations
 
-- Supports Convolution Forward Propagation (Conv Fwd) graphs only
 - CPU reference validation is stubbed (CPU reference plugin not yet available in Python bindings)
 - A/B testing uses `np.allclose()` for accuracy comparison between configurations

@@ -14,22 +14,19 @@ from dnn_benchmarking.graph import GraphValidator
 class TestGraphValidator:
     """Tests for GraphValidator."""
 
-    def test_validates_conv_fwd_only(self, sample_conv_fwd_json: Dict[str, Any]) -> None:
+    def test_validates_conv_fwd(self, sample_conv_fwd_json: Dict[str, Any]) -> None:
         """Test that Conv Fwd graph validates successfully."""
         validator = GraphValidator()
 
         # Should not raise
         validator.validate_conv_fwd_only(sample_conv_fwd_json)
 
-    def test_rejects_matmul(self, sample_matmul_json: Dict[str, Any]) -> None:
-        """Test that Matmul graph is rejected."""
+    def test_accepts_matmul(self, sample_matmul_json: Dict[str, Any]) -> None:
+        """Test that Matmul graph is accepted."""
         validator = GraphValidator()
 
-        with pytest.raises(GraphLoadError) as exc_info:
-            validator.validate_conv_fwd_only(sample_matmul_json)
-
-        assert "MatmulAttributes" in str(exc_info.value)
-        assert "unsupported" in str(exc_info.value).lower()
+        # Should not raise - we accept all operations now
+        validator.validate_conv_fwd_only(sample_matmul_json)
 
     def test_rejects_empty_nodes(self) -> None:
         """Test that graph with no nodes is rejected."""
@@ -47,8 +44,8 @@ class TestGraphValidator:
         with pytest.raises(GraphLoadError, match="no operation nodes"):
             validator.validate_conv_fwd_only(graph_json)
 
-    def test_rejects_mixed_operations(self) -> None:
-        """Test that graph with mixed operations is rejected."""
+    def test_accepts_mixed_operations(self) -> None:
+        """Test that graph with mixed operations is accepted."""
         validator = GraphValidator()
         graph_json = {
             "nodes": [
@@ -57,17 +54,19 @@ class TestGraphValidator:
             ]
         }
 
-        with pytest.raises(GraphLoadError) as exc_info:
-            validator.validate_conv_fwd_only(graph_json)
-
-        assert "PointwiseAttributes" in str(exc_info.value)
+        # Should not raise - we accept all operations now
+        validator.validate_conv_fwd_only(graph_json)
 
     def test_get_supported_types(self) -> None:
         """Test get_supported_types returns copy of supported types."""
         validator = GraphValidator()
         types = validator.get_supported_types()
 
+        # Check all supported operation types
         assert "ConvolutionFwdAttributes" in types
+        assert "MatmulAttributes" in types
+        assert "PointwiseAttributes" in types
+        assert "BatchnormInferenceAttributes" in types
 
         # Modifying returned set should not affect validator
         types.add("NewType")
@@ -75,13 +74,17 @@ class TestGraphValidator:
 
     def test_custom_supported_types(self) -> None:
         """Test validator with custom supported types."""
-        validator = GraphValidator(supported_types={"MatmulAttributes"})
+        custom_types = {"MatmulAttributes", "ConvolutionFwdAttributes"}
+        validator = GraphValidator(supported_types=custom_types)
 
-        # Matmul should now be valid
+        # Verify the custom types are stored
+        types = validator.get_supported_types()
+        assert types == custom_types
+
+        # Both operations should be valid with validate_conv_fwd_only
+        # (since it accepts any operation now)
         matmul_json = {"nodes": [{"type": "MatmulAttributes", "name": "matmul"}]}
         validator.validate_conv_fwd_only(matmul_json)  # Should not raise
 
-        # ConvFwd should now be invalid
         conv_json = {"nodes": [{"type": "ConvolutionFwdAttributes", "name": "conv"}]}
-        with pytest.raises(GraphLoadError):
-            validator.validate_conv_fwd_only(conv_json)
+        validator.validate_conv_fwd_only(conv_json)  # Should not raise
