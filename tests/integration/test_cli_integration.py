@@ -103,6 +103,58 @@ class TestCLIIntegration:
         # Should succeed
         assert result.returncode == 0, f"CLI failed with: {result.stderr}"
 
+    @pytest.mark.gpu
+    @pytest.mark.parametrize(
+        "graph_name,expected_name",
+        [
+            ("sample_conv_fwd.json", "sample_conv_fwd_16x16x16x16_k16_3x3"),
+            ("sample_matmul.json", "sample_matmul_256x512x1024"),
+            ("sample_relu.json", "sample_relu_activation_64x128x56x56"),
+            ("sample_add.json", "sample_pointwise_add_128x256x14x14"),
+            ("sample_batchnorm.json", "sample_batchnorm_inference_32x64x28x28"),
+        ],
+    )
+    def test_cli_all_sample_graphs(self, graph_name: str, expected_name: str) -> None:
+        """Test CLI execution with all sample graph types."""
+        sample_path = Path(__file__).parent.parent.parent / "graphs" / graph_name
+
+        if not sample_path.exists():
+            pytest.skip(f"Sample graph not found: {sample_path}")
+
+        # Check if hipdnn is available
+        try:
+            import hipdnn_frontend
+
+            hipdnn_frontend.Handle()
+        except Exception as e:
+            pytest.skip(f"hipdnn_frontend not available or no GPU: {e}")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "dnn_benchmarking",
+                "--graph",
+                str(sample_path),
+                "--warmup",
+                "1",
+                "--iters",
+                "2",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent,
+        )
+
+        # Check output contains expected sections
+        assert "hipDNN Benchmark" in result.stdout
+        assert expected_name in result.stdout
+        assert "Execution Statistics" in result.stdout
+        assert "Mean" in result.stdout
+
+        # Should succeed
+        assert result.returncode == 0, f"CLI failed for {graph_name}: {result.stderr}"
+
 
 class TestCLIParser:
     """Unit tests for CLI parser."""

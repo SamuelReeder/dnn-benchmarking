@@ -134,6 +134,179 @@ class TestExecution:
 
             assert not np.allclose(output_data, 0)
 
+    def test_matmul_execution_workflow(self, hipdnn) -> None:
+        """Test execution workflow for matmul graph."""
+        sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_matmul.json"
+
+        if not sample_path.exists():
+            pytest.skip(f"Sample graph not found: {sample_path}")
+
+        loader = GraphLoader()
+        graph_json = loader.load_json(sample_path)
+        tensor_infos = loader.extract_tensor_info(graph_json)
+
+        config = BenchmarkConfig(
+            graph_path=sample_path,
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(graph_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+            executor.warmup(handle, variant_pack)
+            timings = executor.benchmark(handle, variant_pack)
+
+            assert len(timings) == 5
+
+            # Get output (C matrix: [256, 1024])
+            output_data = buffer_manager.get_output_data(3)
+            assert output_data is not None
+            assert output_data.shape == (256, 1024)
+
+            import numpy as np
+            assert not np.allclose(output_data, 0)
+
+    def test_relu_execution_workflow(self, hipdnn) -> None:
+        """Test execution workflow for ReLU activation graph."""
+        sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_relu.json"
+
+        if not sample_path.exists():
+            pytest.skip(f"Sample graph not found: {sample_path}")
+
+        loader = GraphLoader()
+        graph_json = loader.load_json(sample_path)
+        tensor_infos = loader.extract_tensor_info(graph_json)
+
+        config = BenchmarkConfig(
+            graph_path=sample_path,
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(graph_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+            executor.warmup(handle, variant_pack)
+            timings = executor.benchmark(handle, variant_pack)
+
+            assert len(timings) == 5
+
+            # Get output (same shape as input: [64, 128, 56, 56])
+            output_data = buffer_manager.get_output_data(2)
+            assert output_data is not None
+            assert output_data.shape == (64, 128, 56, 56)
+
+            import numpy as np
+            # ReLU: output should be non-negative
+            assert np.all(output_data >= 0)
+
+    def test_add_execution_workflow(self, hipdnn) -> None:
+        """Test execution workflow for element-wise add graph."""
+        sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_add.json"
+
+        if not sample_path.exists():
+            pytest.skip(f"Sample graph not found: {sample_path}")
+
+        loader = GraphLoader()
+        graph_json = loader.load_json(sample_path)
+        tensor_infos = loader.extract_tensor_info(graph_json)
+
+        config = BenchmarkConfig(
+            graph_path=sample_path,
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(graph_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+            executor.warmup(handle, variant_pack)
+            timings = executor.benchmark(handle, variant_pack)
+
+            assert len(timings) == 5
+
+            # Get output (z: [128, 256, 14, 14])
+            output_data = buffer_manager.get_output_data(3)
+            assert output_data is not None
+            assert output_data.shape == (128, 256, 14, 14)
+
+            import numpy as np
+            assert not np.allclose(output_data, 0)
+
+    def test_batchnorm_execution_workflow(self, hipdnn) -> None:
+        """Test execution workflow for batchnorm inference graph."""
+        sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_batchnorm.json"
+
+        if not sample_path.exists():
+            pytest.skip(f"Sample graph not found: {sample_path}")
+
+        loader = GraphLoader()
+        graph_json = loader.load_json(sample_path)
+        tensor_infos = loader.extract_tensor_info(graph_json)
+
+        config = BenchmarkConfig(
+            graph_path=sample_path,
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(graph_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+            executor.warmup(handle, variant_pack)
+            timings = executor.benchmark(handle, variant_pack)
+
+            assert len(timings) == 5
+
+            # Get output (y: [32, 64, 28, 28])
+            output_data = buffer_manager.get_output_data(6)
+            assert output_data is not None
+            assert output_data.shape == (32, 64, 28, 28)
+
+            import numpy as np
+            assert not np.allclose(output_data, 0)
+
 
 @pytest.mark.gpu
 class TestExecutionErrors:
