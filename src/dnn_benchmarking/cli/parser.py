@@ -24,6 +24,10 @@ Examples:
   dnn-benchmark --graph ./graphs/conv1_fwd.json
   dnn-benchmark --graph ./graphs/conv1_fwd.json --warmup 20 --iters 200
   dnn-benchmark -g ./graphs/conv1_fwd.json -e 1
+
+A/B Testing:
+  dnn-benchmark -g ./graph.json --AId 1 --BId 2
+  dnn-benchmark -g ./graph.json --APath /path/pluginA --AId 1 --BPath /path/pluginB --BId 2
         """,
     )
 
@@ -70,6 +74,51 @@ Examples:
         default=None,
         metavar="SEED",
         help="Random seed for reproducible input data (default: None)",
+    )
+
+    # A/B Testing arguments
+    ab_group = parser.add_argument_group("A/B Testing")
+    ab_group.add_argument(
+        "--APath",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Plugin path for configuration A (default: use system default)",
+    )
+    ab_group.add_argument(
+        "--AId",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="Engine ID for configuration A",
+    )
+    ab_group.add_argument(
+        "--BPath",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Plugin path for configuration B (default: use system default)",
+    )
+    ab_group.add_argument(
+        "--BId",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="Engine ID for configuration B",
+    )
+    ab_group.add_argument(
+        "--rtol",
+        type=float,
+        default=1e-5,
+        metavar="TOL",
+        help="Relative tolerance for A/B comparison (default: 1e-5)",
+    )
+    ab_group.add_argument(
+        "--atol",
+        type=float,
+        default=1e-8,
+        metavar="TOL",
+        help="Absolute tolerance for A/B comparison (default: 1e-8)",
     )
 
     return parser

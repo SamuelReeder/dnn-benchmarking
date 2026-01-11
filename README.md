@@ -26,15 +26,40 @@ pip install -e ".[dev]"
 
 ## Usage
 
+### Basic Benchmarking
+
 ```bash
 # Run benchmark on a serialized graph
 python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json --warmup 10 --iters 100
 
 # With custom engine ID
 python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json --engine-id 1
+
+# With reproducible random seed
+python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json --seed 42
+```
+
+### A/B Testing
+
+Compare two different plugin/engine configurations and validate accuracy:
+
+```bash
+# Compare two different engines on the default plugin
+python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json --AId 1 --BId 2
+
+# Compare two different plugins with specific engine IDs
+python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json \
+  --APath /path/to/pluginA --AId 1 \
+  --BPath /path/to/pluginB --BId 2
+
+# With custom tolerance for accuracy comparison
+python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json \
+  --AId 1 --BId 2 --rtol 1e-3 --atol 1e-6
 ```
 
 ### CLI Options
+
+#### Basic Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -42,8 +67,24 @@ python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json --engine-id 1
 | `--warmup`, `-w` | Number of warmup iterations | 10 |
 | `--iters`, `-i` | Number of benchmark iterations | 100 |
 | `--engine-id`, `-e` | Engine ID (1 = MIOpen) | 1 |
+| `--seed` | Random seed for reproducibility | None |
+
+#### A/B Testing Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--APath` | Plugin path for configuration A | None (default) |
+| `--AId` | Engine ID for configuration A | Required for A/B |
+| `--BPath` | Plugin path for configuration B | None (default) |
+| `--BId` | Engine ID for configuration B | Required for A/B |
+| `--rtol` | Relative tolerance for accuracy comparison | 1e-5 |
+| `--atol` | Absolute tolerance for accuracy comparison | 1e-8 |
+
+**Note**: A/B testing mode is enabled when both `--AId` and `--BId` are specified.
 
 ## Output
+
+### Basic Benchmark Output
 
 ```
 ================================================================================
@@ -70,6 +111,48 @@ Validation: SKIPPED (CPU reference not available)
 ================================================================================
 ```
 
+### A/B Testing Output
+
+```
+================================================================================
+hipDNN A/B Test: sample_conv_fwd_16x16x16x16_k16_3x3
+================================================================================
+Graph:      ./graphs/sample_conv_fwd.json
+Warmup:     10 iterations
+Benchmark:  100 iterations
+--------------------------------------------------------------------------------
+Configuration A:
+  Plugin Path: /path/to/pluginA
+  Engine ID:   1
+Configuration B:
+  Plugin Path: /path/to/pluginB
+  Engine ID:   2
+--------------------------------------------------------------------------------
+
+                        A                   B
+Init Time:          45.23 ms            42.18 ms
+Mean:                1.234 ms            1.156 ms
+Std Dev:             0.045 ms            0.038 ms
+Min:                 1.156 ms            1.098 ms
+Max:                 1.456 ms            1.312 ms
+P95:                 1.312 ms            1.234 ms
+P99:                 1.398 ms            1.289 ms
+--------------------------------------------------------------------------------
+Speedup:            B is 6.3% faster
+
+Accuracy Comparison: PASSED
+  (rtol=1e-05, atol=1e-08)
+================================================================================
+```
+
+### Exit Codes
+
+| Code | Description |
+|------|-------------|
+| 0 | Success (benchmark passed or A/B comparison passed) |
+| 1 | Error (graph load error, execution error, configuration error) |
+| 2 | A/B comparison failed (accuracy mismatch) |
+
 ## Running Tests
 
 ```bash
@@ -83,8 +166,8 @@ pytest tests/unit
 pytest -m "not gpu"
 ```
 
-## MVP Limitations
+## Limitations
 
 - Supports Convolution Forward Propagation (Conv Fwd) graphs only
-- Validation is stubbed (CPU reference not yet available in Python)
-- A/B engine comparison deferred to post-MVP
+- CPU reference validation is stubbed (CPU reference plugin not yet available in Python bindings)
+- A/B testing uses `np.allclose()` for accuracy comparison between configurations

@@ -3,7 +3,7 @@
 
 """Graph execution with timing for benchmarks."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from ..common.exceptions import ExecutionError
 from ..config.benchmark_config import BenchmarkConfig
@@ -35,11 +35,13 @@ class Executor:
         self._workspace_ptr: int = 0
         self._init_time_ms: float = 0.0
 
-    def prepare(self, handle: Any) -> None:
+    def prepare(self, handle: Any, engine_id: Optional[int] = None) -> None:
         """Build the operation graph and prepare for execution.
 
         Args:
             handle: hipdnn.Handle instance.
+            engine_id: Optional engine ID to use. If specified, overrides
+                       any engine ID in the graph JSON.
 
         Raises:
             ExecutionError: If graph building fails.
@@ -63,10 +65,9 @@ class Executor:
             if result.is_bad():
                 raise ExecutionError(f"Failed to deserialize graph: {result.get_message()}")
 
-            # Set engine preference (optional - graph may already have engine_id from JSON)
-            # Note: set_preferred_engine_id_ext expects std::optional<long>
-            # Skip setting if not explicitly needed
-            pass  # Engine preference comes from JSON if specified
+            # Set engine preference if specified
+            if engine_id is not None:
+                self._graph.set_preferred_engine_id_ext(engine_id)
 
             # Validate
             result = self._graph.validate()
