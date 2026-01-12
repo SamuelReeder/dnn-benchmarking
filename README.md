@@ -15,14 +15,42 @@ This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, c
 
 ## Installation
 
+### Using Virtual Environment (Recommended)
+
 ```bash
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies and package
+pip install -r requirements.txt
+pip install -e .
+
+# Install hipDNN Python bindings (from your hipDNN build)
+cd /path/to/hipdnn/python && pip install -e . && cd -
+```
+
+For development (includes pytest):
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-For development:
+To deactivate the virtual environment later:
 ```bash
-pip install -e ".[dev]"
+deactivate
 ```
+
+### Direct Installation (No venv)
+
+```bash
+pip install -e .  # Basic installation
+pip install -e ".[dev]"  # With development tools
+```
+
+**Note**: hipDNN Python bindings (`hipdnn_frontend`) must be installed separately.
 
 ## Usage
 
@@ -155,32 +183,58 @@ Accuracy Comparison: PASSED
 
 ## Running Tests
 
+### Quick Start
+
 ```bash
-# All tests
+# Activate venv
+source .venv/bin/activate
+
+# All non-GPU tests (no hipDNN required)
+pytest -m "not gpu"
+
+# All tests including GPU (requires hipDNN bindings)
 pytest
 
-# Unit tests only
-pytest tests/unit
+# Only GPU tests
+pytest -m gpu
+```
 
-# Skip GPU tests
-pytest -m "not gpu"
+### Detailed Setup for GPU Tests
+
+GPU tests require hipDNN Python bindings. See **[SETUP.md](SETUP.md)** for complete installation instructions.
+
+**Quick version:**
+```bash
+source .venv/bin/activate
+export CMAKE_PREFIX_PATH=/path/to/hipdnn/build/lib/cmake
+cd /path/to/hipdnn/python && pip install -e .
+```
+
+Then run:
+```bash
+pytest  # Runs all 111 tests (96 passed, 15 GPU)
 ```
 
 ## Supported Operations
 
-The benchmark tool supports any valid hipDNN graph operation, including:
+The benchmark tool accepts any valid hipDNN graph operation. However, **actual execution depends on available engine plugins**.
 
-- **Convolution**: Forward, Data Gradient, Weight Gradient
+**Currently Working with MIOpen Plugin:**
+- **Convolution**: Forward, Data Gradient, Weight Gradient ✓
+
+**Defined but Unsupported by MIOpen Plugin (need other engines):**
 - **Matrix Multiplication**: Standard matmul operations
 - **Pointwise**: Activations (ReLU, Sigmoid, Tanh, etc.) and element-wise operations (Add, Mul, etc.)
 - **Batch Normalization**: Training and inference modes
 
 Sample graphs are provided in the `graphs/` directory:
-- `sample_conv_fwd.json` - Convolution forward (16x16x16x16, k=16, 3x3)
-- `sample_matmul.json` - Matrix multiplication (256x512 × 512x1024)
-- `sample_relu.json` - ReLU activation (64x128x56x56)
-- `sample_add.json` - Element-wise addition (128x256x14x14)
-- `sample_batchnorm.json` - Batch normalization inference (32x64x28x28)
+- ✓ `sample_conv_fwd.json` - Convolution forward (16x16x16x16, k=16, 3x3) - **Works**
+- ✗ `sample_matmul.json` - Matrix multiplication (256x512 × 512x1024) - Needs matmul engine
+- ✗ `sample_relu.json` - ReLU activation (64x128x56x56) - Needs pointwise engine
+- ✗ `sample_add.json` - Element-wise addition (128x256x14x14) - Needs pointwise engine
+- ✗ `sample_batchnorm.json` - Batch normalization inference (32x64x28x28) - Needs batchnorm engine
+
+**Note**: The tool validates and loads all graph types. Execution requires appropriate engine plugins. Tests for unsupported operations are marked as xfail and will pass once engines become available.
 
 ## Limitations
 

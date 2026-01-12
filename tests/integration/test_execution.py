@@ -134,6 +134,7 @@ class TestExecution:
 
             assert not np.allclose(output_data, 0)
 
+    @pytest.mark.xfail(reason="MIOpen plugin doesn't support matmul operations yet")
     def test_matmul_execution_workflow(self, hipdnn) -> None:
         """Test execution workflow for matmul graph."""
         sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_matmul.json"
@@ -177,6 +178,7 @@ class TestExecution:
             import numpy as np
             assert not np.allclose(output_data, 0)
 
+    @pytest.mark.xfail(reason="MIOpen plugin doesn't support pointwise operations yet")
     def test_relu_execution_workflow(self, hipdnn) -> None:
         """Test execution workflow for ReLU activation graph."""
         sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_relu.json"
@@ -221,6 +223,7 @@ class TestExecution:
             # ReLU: output should be non-negative
             assert np.all(output_data >= 0)
 
+    @pytest.mark.xfail(reason="MIOpen plugin doesn't support pointwise operations yet")
     def test_add_execution_workflow(self, hipdnn) -> None:
         """Test execution workflow for element-wise add graph."""
         sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_add.json"
@@ -264,6 +267,7 @@ class TestExecution:
             import numpy as np
             assert not np.allclose(output_data, 0)
 
+    @pytest.mark.xfail(reason="MIOpen plugin doesn't support batchnorm operations yet")
     def test_batchnorm_execution_workflow(self, hipdnn) -> None:
         """Test execution workflow for batchnorm inference graph."""
         sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_batchnorm.json"
