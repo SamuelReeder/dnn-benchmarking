@@ -199,42 +199,17 @@ pytest
 pytest -m gpu
 ```
 
-### Detailed Setup for GPU Tests
+### GPU Tests
 
-GPU tests require hipDNN Python bindings. See **[SETUP.md](SETUP.md)** for complete installation instructions.
+GPU tests require hipDNN Python bindings:
 
-**Quick version:**
 ```bash
 source .venv/bin/activate
 export CMAKE_PREFIX_PATH=/path/to/hipdnn/build/lib/cmake
 cd /path/to/hipdnn/python && pip install -e .
+cd -
+pytest
 ```
-
-Then run:
-```bash
-pytest  # Runs all 111 tests (96 passed, 15 GPU)
-```
-
-## Supported Operations
-
-The benchmark tool accepts any valid hipDNN graph operation. However, **actual execution depends on available engine plugins**.
-
-**Currently Working with MIOpen Plugin:**
-- **Convolution**: Forward, Data Gradient, Weight Gradient ✓
-
-**Defined but Unsupported by MIOpen Plugin (need other engines):**
-- **Matrix Multiplication**: Standard matmul operations
-- **Pointwise**: Activations (ReLU, Sigmoid, Tanh, etc.) and element-wise operations (Add, Mul, etc.)
-- **Batch Normalization**: Training and inference modes
-
-Sample graphs are provided in the `graphs/` directory:
-- ✓ `sample_conv_fwd.json` - Convolution forward (16x16x16x16, k=16, 3x3) - **Works**
-- ✗ `sample_matmul.json` - Matrix multiplication (256x512 × 512x1024) - Needs matmul engine
-- ✗ `sample_relu.json` - ReLU activation (64x128x56x56) - Needs pointwise engine
-- ✗ `sample_add.json` - Element-wise addition (128x256x14x14) - Needs pointwise engine
-- ✗ `sample_batchnorm.json` - Batch normalization inference (32x64x28x28) - Needs batchnorm engine
-
-**Note**: The tool validates and loads all graph types. Execution requires appropriate engine plugins. Tests for unsupported operations are marked as xfail and will pass once engines become available.
 
 ## Limitations
 
