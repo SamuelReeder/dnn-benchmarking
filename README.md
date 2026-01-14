@@ -4,7 +4,7 @@ Benchmarking and validation tool for hipDNN graphs.
 
 ## Overview
 
-This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, captures performance metrics, and validates correctness against a reference baseline.
+This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, captures performance metrics, and soon will validate correctness against a reference baseline.
 
 ## Requirements
 
@@ -28,19 +28,6 @@ pip install -e .
 
 # Install hipDNN Python bindings (from your hipDNN build)
 cd /path/to/hipdnn/python && pip install -e . && cd -
-```
-
-For development (includes pytest):
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-To deactivate the virtual environment later:
-```bash
-deactivate
 ```
 
 ### Direct Installation (No venv)
@@ -138,48 +125,6 @@ Execution Statistics:
 Validation: SKIPPED (CPU reference not available)
 ================================================================================
 ```
-
-### A/B Testing Output
-
-```
-================================================================================
-hipDNN A/B Test: sample_conv_fwd_16x16x16x16_k16_3x3
-================================================================================
-Graph:      ./graphs/sample_conv_fwd.json
-Warmup:     10 iterations
-Benchmark:  100 iterations
---------------------------------------------------------------------------------
-Configuration A:
-  Plugin Path: /path/to/pluginA
-  Engine ID:   1
-Configuration B:
-  Plugin Path: /path/to/pluginB
-  Engine ID:   2
---------------------------------------------------------------------------------
-
-                        A                   B
-Init Time:          45.23 ms            42.18 ms
-Mean:                1.234 ms            1.156 ms
-Std Dev:             0.045 ms            0.038 ms
-Min:                 1.156 ms            1.098 ms
-Max:                 1.456 ms            1.312 ms
-P95:                 1.312 ms            1.234 ms
-P99:                 1.398 ms            1.289 ms
---------------------------------------------------------------------------------
-Speedup:            B is 6.3% faster
-
-Accuracy Comparison: PASSED
-  (rtol=1e-05, atol=1e-08)
-================================================================================
-```
-
-### Exit Codes
-
-| Code | Description |
-|------|-------------|
-| 0 | Success (benchmark passed or A/B comparison passed) |
-| 1 | Error (graph load error, execution error, configuration error) |
-| 2 | A/B comparison failed (accuracy mismatch) |
 
 ## Running Tests
 
