@@ -1,6 +1,3 @@
-# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
-# SPDX-License-Identifier: MIT
-
 """Benchmark statistics calculation."""
 
 from dataclasses import dataclass

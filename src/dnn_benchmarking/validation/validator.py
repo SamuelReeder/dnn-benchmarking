@@ -1,6 +1,3 @@
-# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
-# SPDX-License-Identifier: MIT
-
 """Validation module for comparing execution output against reference.
 
 Currently STUBBED - CPU reference plugin not available in Python.

@@ -1,6 +1,3 @@
-# Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
-# SPDX-License-Identifier: MIT
-
 """Graph execution with timing for benchmarks."""
 
 from typing import Any, Dict, List, Optional, Union
