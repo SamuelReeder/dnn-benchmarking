@@ -96,9 +96,4 @@ class Validator:
         if result.passed:
             return (True, f"A/B outputs match (rtol={self._rtol}, atol={self._atol})")
         else:
-            return (
-                False,
-                f"A/B mismatch: max_abs_diff={result.max_abs_diff:.2e}, "
-                f"max_rel_diff={result.max_rel_diff:.2e} "
-                f"(rtol={self._rtol}, atol={self._atol})",
-            )
+            return (False, f"A/B mismatch: {result.message}")

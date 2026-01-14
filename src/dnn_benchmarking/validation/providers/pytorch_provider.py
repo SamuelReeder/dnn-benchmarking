@@ -141,10 +141,10 @@ class PyTorchReferenceProvider(ReferenceProvider):
                 f"Supported: {list(self._op_handlers.keys())}"
             )
 
-        # Convert input data to torch tensors
+        # Convert input data to torch tensors (CPU only for now)
         tensors: Dict[int, torch.Tensor] = {}
         for uid, data in input_data.items():
-            tensors[uid] = torch.from_numpy(data.copy())
+            tensors[uid] = torch.from_numpy(data.copy()).cpu()
 
         # Execute each node in order
         for node in graph_json.get("nodes", []):
@@ -167,7 +167,7 @@ class PyTorchReferenceProvider(ReferenceProvider):
         for uid in output_uids:
             if uid in tensors:
                 results[uid] = ReferenceOutput(
-                    data=tensors[uid].numpy(),
+                    data=tensors[uid].cpu().numpy(),
                     tensor_uid=uid,
                 )
 
