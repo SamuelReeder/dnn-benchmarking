@@ -82,3 +82,36 @@ class ABTestConfig:
             raise ValueError(f"Plugin path A does not exist: {self.a_path}")
         if self.b_path is not None and not self.b_path.exists():
             raise ValueError(f"Plugin path B does not exist: {self.b_path}")
+
+
+@dataclass
+class ValidationConfig:
+    """Configuration for reference validation.
+
+    Attributes:
+        provider: Reference provider name ("pytorch", "cpu_plugin", or "none").
+        rtol: Relative tolerance for comparison.
+        atol: Absolute tolerance for comparison.
+    """
+
+    provider: str = "none"
+    rtol: float = 1e-5
+    atol: float = 1e-8
+
+    def __post_init__(self) -> None:
+        """Validate configuration values."""
+        valid_providers = {"none", "pytorch", "cpu_plugin"}
+        if self.provider not in valid_providers:
+            raise ValueError(
+                f"Invalid provider: '{self.provider}'. "
+                f"Valid options: {valid_providers}"
+            )
+        if self.rtol < 0:
+            raise ValueError("rtol must be non-negative")
+        if self.atol < 0:
+            raise ValueError("atol must be non-negative")
+
+    @property
+    def enabled(self) -> bool:
+        """Check if validation is enabled."""
+        return self.provider != "none"

@@ -22,6 +22,10 @@ Examples:
   dnn-benchmark --graph ./graphs/conv1_fwd.json --warmup 20 --iters 200
   dnn-benchmark -g ./graphs/conv1_fwd.json -e 1
 
+Reference Validation:
+  dnn-benchmark -g ./graph.json --validate pytorch
+  dnn-benchmark -g ./graph.json --validate pytorch --validate-rtol 1e-3
+
 A/B Testing:
   dnn-benchmark -g ./graph.json --AId 1 --BId 2
   dnn-benchmark -g ./graph.json --APath /path/pluginA --AId 1 --BPath /path/pluginB --BId 2
@@ -116,6 +120,32 @@ A/B Testing:
         default=1e-8,
         metavar="TOL",
         help="Absolute tolerance for A/B comparison (default: 1e-8)",
+    )
+
+    # Reference Validation arguments
+    val_group = parser.add_argument_group("Reference Validation")
+    val_group.add_argument(
+        "--validate",
+        type=str,
+        choices=["pytorch", "cpu_plugin", "none"],
+        default="none",
+        metavar="PROVIDER",
+        help="Reference provider for validation (default: none). "
+        "Options: pytorch, cpu_plugin, none",
+    )
+    val_group.add_argument(
+        "--validate-rtol",
+        type=float,
+        default=1e-5,
+        metavar="TOL",
+        help="Relative tolerance for validation (default: 1e-5)",
+    )
+    val_group.add_argument(
+        "--validate-atol",
+        type=float,
+        default=1e-8,
+        metavar="TOL",
+        help="Absolute tolerance for validation (default: 1e-8)",
     )
 
     return parser

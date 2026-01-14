@@ -221,3 +221,32 @@ class Reporter:
         if not passed:
             self._print(f"  Max abs diff: {max_abs_diff:.2e}")
             self._print(f"  Max rel diff: {max_rel_diff:.2e}")
+
+    # Reference Validation Methods
+
+    def print_reference_validation(
+        self,
+        provider_name: str,
+        passed: bool,
+        max_abs_diff: float,
+        max_rel_diff: float,
+        rtol: float,
+        atol: float,
+    ) -> None:
+        """Print reference validation result.
+
+        Args:
+            provider_name: Name of the reference provider used.
+            passed: Whether validation passed.
+            max_abs_diff: Maximum absolute difference.
+            max_rel_diff: Maximum relative difference.
+            rtol: Relative tolerance used.
+            atol: Absolute tolerance used.
+        """
+        status = "PASSED" if passed else "FAILED"
+        self._print(f"Reference Validation: {status}")
+        self._print(f"  Provider: {provider_name}")
+        self._print(f"  (rtol={rtol:.0e}, atol={atol:.0e})")
+        if not passed:
+            self._print(f"  Max abs diff: {max_abs_diff:.2e}")
+            self._print(f"  Max rel diff: {max_rel_diff:.2e}")

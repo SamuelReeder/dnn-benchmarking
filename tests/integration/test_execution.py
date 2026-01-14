@@ -4,11 +4,13 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
+import numpy as np
 import pytest
 
 from dnn_benchmarking.config import BenchmarkConfig
 from dnn_benchmarking.execution import BufferManager, Executor
 from dnn_benchmarking.graph import GraphLoader
+from dnn_benchmarking.validation import ArrayComparator, ReferenceProviderRegistry
 
 
 @pytest.mark.gpu
@@ -357,3 +359,214 @@ class TestExecutionErrors:
 
         with pytest.raises(ExecutionError, match="not allocated"):
             buffer_manager.create_variant_pack()
+
+
+@pytest.mark.gpu
+class TestPyTorchReferenceValidation:
+    """Integration tests for PyTorch reference validation with GPU execution."""
+
+    @pytest.fixture
+    def hipdnn(self):
+        """Get hipdnn_frontend module or skip if not available."""
+        try:
+            import hipdnn_frontend
+
+            # Test that we can create a handle (requires GPU)
+            hipdnn_frontend.Handle()
+            return hipdnn_frontend
+        except Exception as e:
+            pytest.skip(f"hipdnn_frontend not available or no GPU: {e}")
+
+    @pytest.fixture
+    def pytorch_provider(self):
+        """Get PyTorch reference provider or skip if not available."""
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            pytest.skip("PyTorch not available")
+
+        provider = ReferenceProviderRegistry.get_provider("pytorch")
+        if not provider.is_available():
+            pytest.skip("PyTorch provider not available")
+        return provider
+
+    def test_conv_fwd_validates_against_pytorch(
+        self,
+        hipdnn,
+        pytorch_provider,
+        sample_conv_fwd_json: Dict[str, Any],
+    ) -> None:
+        """Test that convolution output matches PyTorch reference."""
+        loader = GraphLoader()
+        tensor_infos = loader.extract_tensor_info(sample_conv_fwd_json)
+
+        config = BenchmarkConfig(
+            graph_path=Path("/test/graph.json"),
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(sample_conv_fwd_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+            executor.warmup(handle, variant_pack)
+            executor.benchmark(handle, variant_pack)
+
+            # Get hipDNN output
+            output_data = buffer_manager.get_output_data(0)
+            assert output_data is not None
+
+            # Collect input data for PyTorch reference
+            input_data = {}
+            for tensor_info in tensor_infos:
+                if not tensor_info.is_virtual and not tensor_info.is_output:
+                    data = buffer_manager.get_input_data(tensor_info.uid)
+                    if data is not None:
+                        input_data[tensor_info.uid] = data
+
+            # Compute PyTorch reference
+            reference_outputs = pytorch_provider.compute_reference(
+                sample_conv_fwd_json, input_data
+            )
+
+            # Compare
+            assert 0 in reference_outputs
+            reference_data = reference_outputs[0].data
+
+            # Use relaxed tolerances for floating point comparison
+            comparator = ArrayComparator(rtol=1e-3, atol=1e-5)
+            result = comparator.compare(output_data, reference_data, "hipDNN", "PyTorch")
+
+            assert result.passed, (
+                f"hipDNN output does not match PyTorch reference: {result.message}"
+            )
+
+    @pytest.mark.xfail(reason="MIOpen plugin doesn't support pointwise operations yet")
+    def test_relu_validates_against_pytorch(self, hipdnn, pytorch_provider) -> None:
+        """Test that ReLU output matches PyTorch reference."""
+        sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_relu.json"
+
+        if not sample_path.exists():
+            pytest.skip(f"Sample graph not found: {sample_path}")
+
+        loader = GraphLoader()
+        graph_json = loader.load_json(sample_path)
+        tensor_infos = loader.extract_tensor_info(graph_json)
+
+        config = BenchmarkConfig(
+            graph_path=sample_path,
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(graph_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+            executor.warmup(handle, variant_pack)
+            executor.benchmark(handle, variant_pack)
+
+            # Get hipDNN output (uid=2 for relu output)
+            output_data = buffer_manager.get_output_data(2)
+            assert output_data is not None
+
+            # Collect input data
+            input_data = {}
+            for tensor_info in tensor_infos:
+                if not tensor_info.is_virtual and not tensor_info.is_output:
+                    data = buffer_manager.get_input_data(tensor_info.uid)
+                    if data is not None:
+                        input_data[tensor_info.uid] = data
+
+            # Compute PyTorch reference
+            reference_outputs = pytorch_provider.compute_reference(graph_json, input_data)
+
+            # Compare
+            assert 2 in reference_outputs
+            reference_data = reference_outputs[2].data
+
+            comparator = ArrayComparator(rtol=1e-5, atol=1e-8)
+            result = comparator.compare(output_data, reference_data, "hipDNN", "PyTorch")
+
+            assert result.passed, (
+                f"hipDNN ReLU output does not match PyTorch: {result.message}"
+            )
+
+    @pytest.mark.xfail(reason="MIOpen plugin doesn't support pointwise operations yet")
+    def test_add_validates_against_pytorch(self, hipdnn, pytorch_provider) -> None:
+        """Test that Add output matches PyTorch reference."""
+        sample_path = Path(__file__).parent.parent.parent / "graphs" / "sample_add.json"
+
+        if not sample_path.exists():
+            pytest.skip(f"Sample graph not found: {sample_path}")
+
+        loader = GraphLoader()
+        graph_json = loader.load_json(sample_path)
+        tensor_infos = loader.extract_tensor_info(graph_json)
+
+        config = BenchmarkConfig(
+            graph_path=sample_path,
+            warmup_iters=2,
+            benchmark_iters=5,
+            engine_id=1,
+        )
+
+        graph_json_str = json.dumps(graph_json)
+        executor = Executor(graph_json_str, config)
+
+        handle = hipdnn.Handle()
+        executor.prepare(handle)
+
+        with BufferManager(tensor_infos) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=42)
+            buffer_manager.zero_outputs()
+
+            variant_pack = buffer_manager.create_variant_pack()
+            executor.warmup(handle, variant_pack)
+            executor.benchmark(handle, variant_pack)
+
+            # Get hipDNN output (uid=3 for add output)
+            output_data = buffer_manager.get_output_data(3)
+            assert output_data is not None
+
+            # Collect input data
+            input_data = {}
+            for tensor_info in tensor_infos:
+                if not tensor_info.is_virtual and not tensor_info.is_output:
+                    data = buffer_manager.get_input_data(tensor_info.uid)
+                    if data is not None:
+                        input_data[tensor_info.uid] = data
+
+            # Compute PyTorch reference
+            reference_outputs = pytorch_provider.compute_reference(graph_json, input_data)
+
+            # Compare
+            assert 3 in reference_outputs
+            reference_data = reference_outputs[3].data
+
+            comparator = ArrayComparator(rtol=1e-5, atol=1e-8)
+            result = comparator.compare(output_data, reference_data, "hipDNN", "PyTorch")
+
+            assert result.passed, (
+                f"hipDNN Add output does not match PyTorch: {result.message}"
+            )

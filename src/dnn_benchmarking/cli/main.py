@@ -5,28 +5,35 @@ import sys
 from typing import Optional
 
 from ..common.exceptions import ExecutionError, GraphLoadError
-from ..config.benchmark_config import ABTestConfig, BenchmarkConfig
+from ..config.benchmark_config import ABTestConfig, BenchmarkConfig, ValidationConfig
 from ..execution.ab_runner import ABRunner
 from ..execution.buffer_manager import BufferManager
 from ..execution.executor import Executor
 from ..graph.loader import GraphLoader
 from ..reporting.reporter import Reporter
 from ..reporting.statistics import BenchmarkStats
+from ..validation import ArrayComparator, ReferenceProviderRegistry
 from ..validation.validator import Validator
 from .parser import create_parser
 
 
-def run_benchmark(config: BenchmarkConfig, seed: Optional[int] = None) -> int:
+def run_benchmark(
+    config: BenchmarkConfig,
+    seed: Optional[int] = None,
+    validation_config: Optional[ValidationConfig] = None,
+) -> int:
     """Run the benchmark workflow.
 
     Args:
         config: Benchmark configuration.
         seed: Optional random seed for reproducibility.
+        validation_config: Optional validation configuration.
 
     Returns:
-        Exit code (0 for success, 1 for error).
+        Exit code (0 for success, 1 for error, 2 for validation failure).
     """
     reporter = Reporter()
+    validation_passed = True
 
     try:
         # Load and validate graph
@@ -78,13 +85,23 @@ def run_benchmark(config: BenchmarkConfig, seed: Optional[int] = None) -> int:
             stats = BenchmarkStats.from_timings(timings)
             reporter.print_stats(stats)
 
-            # Validation (stubbed)
-            validator = Validator()
-            passed, message = validator.validate_stub()
-            reporter.print_validation(passed, message)
+            # Validation
+            if validation_config is not None and validation_config.enabled:
+                validation_passed = _run_reference_validation(
+                    graph_json=graph_json,
+                    buffer_manager=buffer_manager,
+                    tensor_infos=tensor_infos,
+                    validation_config=validation_config,
+                    reporter=reporter,
+                )
+            else:
+                # Stubbed validation
+                validator = Validator()
+                passed, message = validator.validate_stub()
+                reporter.print_validation(passed, message)
 
         reporter.print_footer()
-        return 0
+        return 0 if validation_passed else 2
 
     except GraphLoadError as e:
         reporter.print_error(f"Graph load error: {e}")
@@ -97,6 +114,109 @@ def run_benchmark(config: BenchmarkConfig, seed: Optional[int] = None) -> int:
     except Exception as e:
         reporter.print_error(f"Unexpected error: {e}")
         return 1
+
+
+def _run_reference_validation(
+    graph_json: dict,
+    buffer_manager: BufferManager,
+    tensor_infos: list,
+    validation_config: ValidationConfig,
+    reporter: Reporter,
+) -> bool:
+    """Run reference validation against a provider.
+
+    Args:
+        graph_json: The graph as a parsed JSON dictionary.
+        buffer_manager: Buffer manager with allocated tensors.
+        tensor_infos: List of TensorInfo objects.
+        validation_config: Validation configuration.
+        reporter: Reporter for output.
+
+    Returns:
+        True if validation passed, False otherwise.
+    """
+    try:
+        # Get reference provider
+        provider = ReferenceProviderRegistry.get_provider(validation_config.provider)
+
+        if not provider.is_available():
+            reporter.print_error(
+                f"Reference provider '{validation_config.provider}' is not available. "
+                f"Available providers: {ReferenceProviderRegistry.list_available()}"
+            )
+            return False
+
+        # Check if provider supports all operations in graph
+        if not provider.supports_graph(graph_json):
+            unsupported = provider.get_unsupported_operations(graph_json)
+            reporter.print_error(
+                f"Reference provider '{validation_config.provider}' does not support "
+                f"operations: {unsupported}"
+            )
+            return False
+
+        # Collect input data from buffer manager
+        input_data = {}
+        for tensor_info in tensor_infos:
+            if not tensor_info.is_virtual and not tensor_info.is_output:
+                data = buffer_manager.get_input_data(tensor_info.uid)
+                if data is not None:
+                    input_data[tensor_info.uid] = data
+
+        # Compute reference outputs
+        reference_outputs = provider.compute_reference(graph_json, input_data)
+
+        # Compare each output tensor
+        comparator = ArrayComparator(
+            rtol=validation_config.rtol, atol=validation_config.atol
+        )
+
+        all_passed = True
+        for tensor_info in tensor_infos:
+            if not tensor_info.is_output:
+                continue
+
+            actual_data = buffer_manager.get_output_data(tensor_info.uid)
+            if actual_data is None:
+                reporter.print_error(f"Failed to get output data for tensor {tensor_info.uid}")
+                all_passed = False
+                continue
+
+            ref_output = reference_outputs.get(tensor_info.uid)
+            if ref_output is None:
+                reporter.print_error(
+                    f"Reference provider did not produce output for tensor {tensor_info.uid}"
+                )
+                all_passed = False
+                continue
+
+            comparison = comparator.compare(
+                actual_data, ref_output.data, "hipDNN", validation_config.provider
+            )
+
+            reporter.print_reference_validation(
+                provider_name=validation_config.provider,
+                passed=comparison.passed,
+                max_abs_diff=comparison.max_abs_diff,
+                max_rel_diff=comparison.max_rel_diff,
+                rtol=validation_config.rtol,
+                atol=validation_config.atol,
+            )
+
+            if not comparison.passed:
+                all_passed = False
+
+        return all_passed
+
+    except ValueError as e:
+        reporter.print_error(f"Validation error: {e}")
+        return False
+    except NotImplementedError as e:
+        reporter.print_error(f"Validation error: {e}")
+        return False
+    except ImportError as e:
+        reporter.print_error(f"Validation error: {e}")
+        return False
 
 
 def run_ab_test(
@@ -215,7 +335,20 @@ def main() -> int:
 
         return run_ab_test(config, ab_config, seed=args.seed)
 
-    return run_benchmark(config, seed=args.seed)
+    # Create validation config if validation is enabled
+    validation_config = None
+    if args.validate != "none":
+        try:
+            validation_config = ValidationConfig(
+                provider=args.validate,
+                rtol=args.validate_rtol,
+                atol=args.validate_atol,
+            )
+        except ValueError as e:
+            print(f"Validation configuration error: {e}", file=sys.stderr)
+            return 1
+
+    return run_benchmark(config, seed=args.seed, validation_config=validation_config)
 
 
 if __name__ == "__main__":

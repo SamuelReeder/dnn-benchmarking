@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from dnn_benchmarking.config import ABTestConfig, BenchmarkConfig
+from dnn_benchmarking.config import ABTestConfig, BenchmarkConfig, ValidationConfig
 
 
 class TestBenchmarkConfig:
@@ -159,3 +159,61 @@ class TestABTestConfig:
 
         with pytest.raises(ValueError, match="Plugin path B does not exist"):
             config.validate_paths()
+
+
+class TestValidationConfig:
+    """Tests for ValidationConfig dataclass."""
+
+    def test_default_values(self) -> None:
+        """Test that defaults are applied correctly."""
+        config = ValidationConfig()
+
+        assert config.provider == "none"
+        assert config.rtol == 1e-5
+        assert config.atol == 1e-8
+        assert config.enabled is False
+
+    def test_custom_values(self) -> None:
+        """Test that custom values are stored correctly."""
+        config = ValidationConfig(
+            provider="pytorch",
+            rtol=1e-3,
+            atol=1e-6,
+        )
+
+        assert config.provider == "pytorch"
+        assert config.rtol == 1e-3
+        assert config.atol == 1e-6
+
+    def test_enabled_property_none(self) -> None:
+        """Test enabled property with provider='none'."""
+        config = ValidationConfig(provider="none")
+
+        assert config.enabled is False
+
+    def test_enabled_property_pytorch(self) -> None:
+        """Test enabled property with provider='pytorch'."""
+        config = ValidationConfig(provider="pytorch")
+
+        assert config.enabled is True
+
+    def test_enabled_property_cpu_plugin(self) -> None:
+        """Test enabled property with provider='cpu_plugin'."""
+        config = ValidationConfig(provider="cpu_plugin")
+
+        assert config.enabled is True
+
+    def test_invalid_provider_raises(self) -> None:
+        """Test that invalid provider raises ValueError."""
+        with pytest.raises(ValueError, match="Invalid provider"):
+            ValidationConfig(provider="invalid_provider")
+
+    def test_negative_rtol_raises(self) -> None:
+        """Test that negative rtol raises ValueError."""
+        with pytest.raises(ValueError, match="rtol must be non-negative"):
+            ValidationConfig(rtol=-1e-5)
+
+    def test_negative_atol_raises(self) -> None:
+        """Test that negative atol raises ValueError."""
+        with pytest.raises(ValueError, match="atol must be non-negative"):
+            ValidationConfig(atol=-1e-8)
