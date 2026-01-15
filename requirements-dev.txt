@@ -8,6 +8,9 @@
 pytest>=7.0.0
 pytest-cov>=4.0.0
 
+# Reference validation
+torch>=2.0.0
+
 # Code formatting and linting (optional)
 # black>=23.0.0
 # ruff>=0.0.260

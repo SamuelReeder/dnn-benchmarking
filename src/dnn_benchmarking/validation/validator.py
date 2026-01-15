@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import numpy as np
 
 from ..graph.tensor_info import TensorInfo
+from .comparison import ArrayComparator
 
 
 class Validator:
@@ -32,6 +33,7 @@ class Validator:
         """
         self._rtol = rtol
         self._atol = atol
+        self._comparator = ArrayComparator(rtol=rtol, atol=atol)
 
     def validate(
         self,
@@ -53,28 +55,17 @@ class Validator:
         if reference_data is None:
             return (True, "Validation skipped - no reference data provided")
 
-        # Ensure shapes match
-        if output_data.shape != reference_data.shape:
-            return (
-                False,
-                f"Shape mismatch: output {output_data.shape} vs reference {reference_data.shape}",
-            )
+        result = self._comparator.compare(
+            output_data, reference_data, "output", "reference"
+        )
 
-        # Perform allclose comparison
-        passed = np.allclose(output_data, reference_data, rtol=self._rtol, atol=self._atol)
-
-        if passed:
+        if result.passed:
             return (True, f"Validation passed (rtol={self._rtol}, atol={self._atol})")
         else:
-            # Calculate max difference for error message
-            abs_diff = np.abs(output_data - reference_data)
-            max_abs_diff = float(np.max(abs_diff))
-            max_rel_diff = float(np.max(abs_diff / (np.abs(reference_data) + 1e-10)))
-
             return (
                 False,
-                f"Validation failed: max_abs_diff={max_abs_diff:.2e}, "
-                f"max_rel_diff={max_rel_diff:.2e} "
+                f"Validation failed: max_abs_diff={result.max_abs_diff:.2e}, "
+                f"max_rel_diff={result.max_rel_diff:.2e} "
                 f"(rtol={self._rtol}, atol={self._atol})",
             )
 
@@ -100,34 +91,9 @@ class Validator:
         Returns:
             Tuple of (passed: bool, message: str).
         """
-        # Check for NaN/Inf in outputs
-        if np.any(np.isnan(output_a)) or np.any(np.isinf(output_a)):
-            return (False, "Output A contains NaN or Inf values")
+        result = self._comparator.compare(output_a, output_b, "A", "B")
 
-        if np.any(np.isnan(output_b)) or np.any(np.isinf(output_b)):
-            return (False, "Output B contains NaN or Inf values")
-
-        # Ensure shapes match
-        if output_a.shape != output_b.shape:
-            return (
-                False,
-                f"Shape mismatch: A={output_a.shape} vs B={output_b.shape}",
-            )
-
-        # Perform allclose comparison
-        passed = np.allclose(output_a, output_b, rtol=self._rtol, atol=self._atol)
-
-        if passed:
+        if result.passed:
             return (True, f"A/B outputs match (rtol={self._rtol}, atol={self._atol})")
         else:
-            # Calculate differences for error message
-            abs_diff = np.abs(output_a - output_b)
-            max_abs_diff = float(np.max(abs_diff))
-            max_rel_diff = float(np.max(abs_diff / (np.abs(output_b) + 1e-10)))
-
-            return (
-                False,
-                f"A/B mismatch: max_abs_diff={max_abs_diff:.2e}, "
-                f"max_rel_diff={max_rel_diff:.2e} "
-                f"(rtol={self._rtol}, atol={self._atol})",
-            )
+            return (False, f"A/B mismatch: {result.message}")

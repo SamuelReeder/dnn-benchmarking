@@ -11,6 +11,7 @@ from ..common.exceptions import ExecutionError
 from ..config.benchmark_config import ABTestConfig, BenchmarkConfig
 from ..graph.loader import GraphLoader
 from ..reporting.statistics import BenchmarkStats
+from ..validation.comparison import ArrayComparator
 from .buffer_manager import BufferManager
 from .executor import Executor
 
@@ -150,37 +151,18 @@ class ABRunner:
             )
             stats_b = BenchmarkStats.from_timings(timings_b)
 
-        # Compare outputs
-        passed = np.allclose(
-            output_a, output_b, rtol=self._ab_config.rtol, atol=self._ab_config.atol
+        # Compare outputs using unified comparator
+        comparator = ArrayComparator(
+            rtol=self._ab_config.rtol, atol=self._ab_config.atol
         )
-
-        # Calculate differences
-        abs_diff = np.abs(output_a - output_b)
-        max_abs_diff = float(np.max(abs_diff))
-
-        # Handle division by zero for relative difference
-        with np.errstate(divide="ignore", invalid="ignore"):
-            rel_diff = abs_diff / (np.abs(output_b) + 1e-10)
-            max_rel_diff = float(np.max(rel_diff))
-
-        # Check for NaN/Inf in outputs
-        if np.any(np.isnan(output_a)) or np.any(np.isinf(output_a)):
-            passed = False
-            max_abs_diff = float("inf")
-            max_rel_diff = float("inf")
-
-        if np.any(np.isnan(output_b)) or np.any(np.isinf(output_b)):
-            passed = False
-            max_abs_diff = float("inf")
-            max_rel_diff = float("inf")
+        comparison = comparator.compare(output_a, output_b, "A", "B")
 
         return ABTestResult(
             stats_a=stats_a,
             stats_b=stats_b,
             init_time_a_ms=init_a,
             init_time_b_ms=init_b,
-            passed=passed,
-            max_abs_diff=max_abs_diff,
-            max_rel_diff=max_rel_diff,
+            passed=comparison.passed,
+            max_abs_diff=comparison.max_abs_diff,
+            max_rel_diff=comparison.max_rel_diff,
         )
