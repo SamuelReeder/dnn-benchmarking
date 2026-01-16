@@ -10,7 +10,7 @@ import numpy as np
 from ..common.exceptions import ExecutionError
 from ..config.benchmark_config import ABTestConfig, BenchmarkConfig
 from ..graph.loader import GraphLoader
-from ..reporting.statistics import BenchmarkStats
+from ..reporting.statistics import BenchmarkResult, BenchmarkStats
 from ..validation.comparison import ArrayComparator
 from .buffer_manager import BufferManager
 from .executor import Executor
@@ -85,7 +85,7 @@ class ABRunner:
         plugin_path: Optional[Path],
         engine_id: int,
         buffer_manager: BufferManager,
-    ) -> Tuple[np.ndarray, List[float], float]:
+    ) -> Tuple[np.ndarray, BenchmarkResult, float]:
         """Execute graph with specific plugin/engine configuration.
 
         Args:
@@ -94,7 +94,7 @@ class ABRunner:
             buffer_manager: Buffer manager with allocated tensors.
 
         Returns:
-            Tuple of (output_data, timings, init_time_ms).
+            Tuple of (output_data, benchmark_result, init_time_ms).
         """
         import hipdnn_frontend as hipdnn
 
@@ -108,7 +108,7 @@ class ABRunner:
 
         variant_pack = buffer_manager.create_variant_pack()
         executor.warmup(handle, variant_pack)
-        timings = executor.benchmark(handle, variant_pack)
+        result = executor.benchmark(handle, variant_pack)
 
         # Get output data - copy to avoid overwriting
         output_tensors = buffer_manager.get_output_tensors()
@@ -119,7 +119,7 @@ class ABRunner:
         if output_data is None:
             raise ExecutionError("Failed to retrieve output data")
 
-        return output_data.copy(), timings, init_time_ms
+        return output_data.copy(), result, init_time_ms
 
     def run(self, seed: Optional[int] = 42) -> ABTestResult:
         """Run A/B comparison.
@@ -139,17 +139,17 @@ class ABRunner:
 
             # Run configuration A
             buffer_manager.zero_outputs()
-            output_a, timings_a, init_a = self._run_single(
+            output_a, result_a, init_a = self._run_single(
                 self._ab_config.a_path, self._ab_config.a_id, buffer_manager
             )
-            stats_a = BenchmarkStats.from_timings(timings_a)
+            stats_a = BenchmarkStats.from_timings(result_a.e2e_timings)
 
             # Run configuration B (same inputs)
             buffer_manager.zero_outputs()
-            output_b, timings_b, init_b = self._run_single(
+            output_b, result_b, init_b = self._run_single(
                 self._ab_config.b_path, self._ab_config.b_id, buffer_manager
             )
-            stats_b = BenchmarkStats.from_timings(timings_b)
+            stats_b = BenchmarkStats.from_timings(result_b.e2e_timings)
 
         # Compare outputs using unified comparator
         comparator = ArrayComparator(

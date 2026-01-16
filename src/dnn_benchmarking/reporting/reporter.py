@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TextIO
 
 from ..config.benchmark_config import ABTestConfig, BenchmarkConfig
-from .statistics import BenchmarkStats
+from .statistics import BenchmarkStats, CombinedBenchmarkStats
 
 
 class Reporter:
@@ -62,13 +62,38 @@ class Reporter:
             stats: Benchmark statistics.
         """
         self._print("Execution Statistics:")
+        self._print_stats_block(stats)
+        self._print("")
+
+    def print_combined_stats(self, stats: CombinedBenchmarkStats) -> None:
+        """Print combined E2E and kernel execution statistics.
+
+        Args:
+            stats: Combined benchmark statistics.
+        """
+        self._print("E2E Execution Statistics:")
+        self._print_stats_block(stats.e2e_stats)
+        self._print("")
+
+        if stats.kernel_stats:
+            self._print("Kernel Execution Statistics:")
+            self._print_stats_block(stats.kernel_stats)
+        else:
+            self._print("Kernel Timing: Not available (HIP runtime not found)")
+        self._print("")
+
+    def _print_stats_block(self, stats: BenchmarkStats) -> None:
+        """Print a statistics block (helper for print_stats/print_combined_stats).
+
+        Args:
+            stats: Benchmark statistics.
+        """
         self._print(f"  Mean:                 {stats.mean_ms:.3f} ms")
         self._print(f"  Std Dev:              {stats.std_ms:.3f} ms")
         self._print(f"  Min:                  {stats.min_ms:.3f} ms")
         self._print(f"  Max:                  {stats.max_ms:.3f} ms")
         self._print(f"  P95:                  {stats.p95_ms:.3f} ms")
         self._print(f"  P99:                  {stats.p99_ms:.3f} ms")
-        self._print("")
 
     def print_validation(self, passed: bool, message: str) -> None:
         """Print validation result.

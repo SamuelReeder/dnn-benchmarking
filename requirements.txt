@@ -4,6 +4,11 @@
 # Core dependencies
 numpy>=1.19.0
 
+# PyTorch (optional - used for reference validation, not required for timing)
+# Kernel timing uses HIP events directly via ctypes (no PyTorch dependency)
+# For validation: pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
+# torch>=2.0.0
+
 # hipDNN Python bindings (must be installed separately)
 # See README for installation instructions
 # hipdnn-frontend

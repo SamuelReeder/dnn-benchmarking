@@ -11,7 +11,7 @@ from ..execution.buffer_manager import BufferManager
 from ..execution.executor import Executor
 from ..graph.loader import GraphLoader
 from ..reporting.reporter import Reporter
-from ..reporting.statistics import BenchmarkStats
+from ..reporting.statistics import BenchmarkStats, CombinedBenchmarkStats
 from ..validation import ArrayComparator, ReferenceProviderRegistry
 from ..validation.validator import Validator
 from .parser import create_parser
@@ -79,11 +79,11 @@ def run_benchmark(
             executor.warmup(handle, variant_pack)
 
             # Run benchmark
-            timings = executor.benchmark(handle, variant_pack)
+            result = executor.benchmark(handle, variant_pack)
 
             # Calculate statistics
-            stats = BenchmarkStats.from_timings(timings)
-            reporter.print_stats(stats)
+            stats = CombinedBenchmarkStats.from_result(result)
+            reporter.print_combined_stats(stats)
 
             # Validation
             if validation_config is not None and validation_config.enabled:

@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from ..common.exceptions import ExecutionError
 from ..config.benchmark_config import BenchmarkConfig
-from .timing import Timer
+from ..reporting.statistics import BenchmarkResult
+from .timing import GpuTimer, Timer, is_gpu_timing_available
 
 
 class Executor:
@@ -123,15 +124,17 @@ class Executor:
             if result.is_bad():
                 raise ExecutionError(f"Warmup execution failed: {result.get_message()}")
 
-    def benchmark(self, handle: Any, variant_pack: Dict[int, int]) -> List[float]:
+    def benchmark(self, handle: Any, variant_pack: Dict[int, int]) -> BenchmarkResult:
         """Run benchmark iterations and collect timing.
+
+        Collects both E2E (wall-clock) timing and GPU kernel timing when available.
 
         Args:
             handle: hipdnn.Handle instance.
             variant_pack: Mapping of tensor UIDs to device pointers.
 
         Returns:
-            List of execution times in milliseconds.
+            BenchmarkResult with E2E and optional kernel timings.
 
         Raises:
             ExecutionError: If graph not prepared or execution fails.
@@ -139,9 +142,14 @@ class Executor:
         if self._graph is None:
             raise ExecutionError("Graph not prepared. Call prepare() first.")
 
-        timings = []
+        e2e_timings: List[float] = []
+        kernel_timings: Optional[List[float]] = [] if is_gpu_timing_available() else None
+        gpu_timer: Optional[GpuTimer] = GpuTimer() if kernel_timings is not None else None
 
         for _ in range(self._config.benchmark_iters):
+            if gpu_timer:
+                gpu_timer.record_start()
+
             with Timer() as t:
                 result = self._graph.execute(handle, variant_pack, self._workspace_ptr)
                 if result.is_bad():
@@ -149,9 +157,13 @@ class Executor:
                         f"Benchmark execution failed: {result.get_message()}"
                     )
 
-            timings.append(t.elapsed_ms)
+            if gpu_timer and kernel_timings is not None:
+                gpu_timer.record_stop()
+                kernel_timings.append(gpu_timer.synchronize_and_get_elapsed())
 
-        return timings
+            e2e_timings.append(t.elapsed_ms)
+
+        return BenchmarkResult(e2e_timings=e2e_timings, kernel_timings=kernel_timings)
 
     @property
     def init_time_ms(self) -> float:
