@@ -1,9 +1,23 @@
 """Benchmark statistics calculation."""
 
-from dataclasses import dataclass
-from typing import List, Optional
+import json
+import socket
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import numpy as np
+
+
+def _get_hostname() -> str:
+    """Get machine hostname for result identification."""
+    return socket.gethostname()
+
+
+def _get_timestamp() -> str:
+    """Get current UTC timestamp in ISO format."""
+    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass
@@ -55,23 +69,123 @@ class BenchmarkStats:
 
 
 @dataclass
+class BenchmarkMetadata:
+    """Metadata for benchmark results export.
+
+    Attributes:
+        timestamp: UTC timestamp when benchmark was run.
+        graph_name: Name/identifier of the graph being benchmarked.
+        graph_path: Path to the graph JSON file.
+        warmup_iters: Number of warmup iterations.
+        benchmark_iters: Number of benchmark iterations.
+        engine_id: Engine ID used for execution.
+        gpu_backend: GPU timer backend used ("hip", "cuda", or "").
+        hostname: Machine hostname where benchmark was run.
+    """
+
+    timestamp: str = field(default_factory=_get_timestamp)
+    graph_name: str = ""
+    graph_path: str = ""
+    warmup_iters: int = 0
+    benchmark_iters: int = 0
+    engine_id: int = 0
+    gpu_backend: str = ""
+    hostname: str = field(default_factory=_get_hostname)
+
+
+@dataclass
 class BenchmarkResult:
     """Raw benchmark timing results.
 
-    Holds both E2E (wall-clock) and optional kernel (GPU event) timings.
+    Holds both E2E (wall-clock) and optional kernel (GPU event) timings,
+    with metadata for cross-device comparison.
 
     Attributes:
         e2e_timings: List of end-to-end execution times in milliseconds.
         kernel_timings: Optional list of GPU kernel times in milliseconds.
+        metadata: Optional metadata for result identification and comparison.
     """
 
     e2e_timings: List[float]
     kernel_timings: Optional[List[float]] = None
+    metadata: Optional[BenchmarkMetadata] = None
 
     @property
     def has_kernel_timings(self) -> bool:
         """Check if kernel timings are available."""
         return self.kernel_timings is not None and len(self.kernel_timings) > 0
+
+    @property
+    def gpu_backend(self) -> str:
+        """Return GPU backend used for kernel timing."""
+        if self.metadata:
+            return self.metadata.gpu_backend
+        return ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization.
+
+        Returns:
+            Dictionary representation of the result.
+        """
+        result: Dict[str, Any] = {
+            "e2e_timings": self.e2e_timings,
+            "kernel_timings": self.kernel_timings,
+        }
+        if self.metadata:
+            result["metadata"] = asdict(self.metadata)
+        return result
+
+    def to_json(self, indent: int = 2) -> str:
+        """Serialize to JSON string.
+
+        Args:
+            indent: JSON indentation level.
+
+        Returns:
+            JSON string representation.
+        """
+        return json.dumps(self.to_dict(), indent=indent)
+
+    def save_json(self, path: str) -> None:
+        """Save results to JSON file.
+
+        Args:
+            path: Path to the output JSON file.
+        """
+        Path(path).write_text(self.to_json())
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BenchmarkResult":
+        """Create from dictionary.
+
+        Args:
+            data: Dictionary with result data.
+
+        Returns:
+            BenchmarkResult instance.
+        """
+        metadata = None
+        if "metadata" in data and data["metadata"]:
+            metadata = BenchmarkMetadata(**data["metadata"])
+        return cls(
+            e2e_timings=data["e2e_timings"],
+            kernel_timings=data.get("kernel_timings"),
+            metadata=metadata,
+        )
+
+    @classmethod
+    def load_json(cls, path: str) -> "BenchmarkResult":
+        """Load results from JSON file.
+
+        Args:
+            path: Path to the JSON file.
+
+        Returns:
+            BenchmarkResult loaded from file.
+        """
+        data = json.loads(Path(path).read_text())
+        return cls.from_dict(data)
 
 
 @dataclass

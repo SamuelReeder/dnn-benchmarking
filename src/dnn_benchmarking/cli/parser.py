@@ -77,6 +77,26 @@ A/B Testing:
         help="Random seed for reproducible input data (default: None)",
     )
 
+    # Output arguments
+    output_group = parser.add_argument_group("Output")
+    output_group.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Export benchmark results to JSON file for offline comparison",
+    )
+    output_group.add_argument(
+        "--gpu-backend",
+        type=str,
+        choices=["hip", "cuda", "auto", "none"],
+        default="auto",
+        metavar="BACKEND",
+        help="GPU timer backend (default: auto). "
+        "Options: hip (AMD), cuda (NVIDIA/PyTorch), auto, none (E2E only)",
+    )
+
     # A/B Testing arguments
     ab_group = parser.add_argument_group("A/B Testing")
     ab_group.add_argument(

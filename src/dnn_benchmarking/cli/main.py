@@ -2,7 +2,8 @@
 
 import json
 import sys
-from typing import Optional
+from pathlib import Path
+from typing import Literal, Optional
 
 from ..common.exceptions import ExecutionError, GraphLoadError
 from ..config.benchmark_config import ABTestConfig, BenchmarkConfig, ValidationConfig
@@ -21,6 +22,8 @@ def run_benchmark(
     config: BenchmarkConfig,
     seed: Optional[int] = None,
     validation_config: Optional[ValidationConfig] = None,
+    output_path: Optional[Path] = None,
+    gpu_backend: Literal["hip", "cuda", "auto", "none"] = "auto",
 ) -> int:
     """Run the benchmark workflow.
 
@@ -28,6 +31,8 @@ def run_benchmark(
         config: Benchmark configuration.
         seed: Optional random seed for reproducibility.
         validation_config: Optional validation configuration.
+        output_path: Optional path to export benchmark results as JSON.
+        gpu_backend: GPU timer backend to use (hip, cuda, auto, none).
 
     Returns:
         Exit code (0 for success, 1 for error, 2 for validation failure).
@@ -62,7 +67,7 @@ def run_benchmark(
 
         # Prepare executor
         graph_json_str = json.dumps(graph_json)
-        executor = Executor(graph_json_str, config)
+        executor = Executor(graph_json_str, config, gpu_backend=gpu_backend)
         executor.prepare(handle)
 
         reporter.print_init_time(executor.init_time_ms)
@@ -79,11 +84,16 @@ def run_benchmark(
             executor.warmup(handle, variant_pack)
 
             # Run benchmark
-            result = executor.benchmark(handle, variant_pack)
+            result = executor.benchmark(handle, variant_pack, graph_name=graph_name)
 
             # Calculate statistics
             stats = CombinedBenchmarkStats.from_result(result)
             reporter.print_combined_stats(stats)
+
+            # Export results if requested
+            if output_path:
+                result.save_json(str(output_path))
+                print(f"Results exported to: {output_path}")
 
             # Validation
             if validation_config is not None and validation_config.enabled:
@@ -348,7 +358,13 @@ def main() -> int:
             print(f"Validation configuration error: {e}", file=sys.stderr)
             return 1
 
-    return run_benchmark(config, seed=args.seed, validation_config=validation_config)
+    return run_benchmark(
+        config,
+        seed=args.seed,
+        validation_config=validation_config,
+        output_path=args.output,
+        gpu_backend=args.gpu_backend,
+    )
 
 
 if __name__ == "__main__":
