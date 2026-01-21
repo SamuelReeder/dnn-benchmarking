@@ -15,29 +15,46 @@ This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, c
 
 ## Installation
 
-### Using Virtual Environment (Recommended)
+### For ROCm/AMD GPUs (hipDNN benchmarking)
 
 ```bash
 # Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 
-# Install dependencies and package
-pip install -r requirements.txt
+# Install ROCm-compatible dependencies (CPU PyTorch to avoid ROCm conflicts)
+pip install -r requirements-rocm.txt
 pip install -e .
 
 # Install hipDNN Python bindings (from your hipDNN build)
 cd /path/to/hipdnn/python && pip install -e . && cd -
 ```
 
-### Direct Installation (No venv)
+### For CUDA/NVIDIA GPUs (PyTorch CUDA benchmarking)
 
 ```bash
-pip install -e .  # Basic installation
-pip install -e ".[dev]"  # With development tools
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install CUDA-compatible dependencies
+pip install -r requirements-cuda.txt
+pip install -e .
 ```
 
-**Note**: hipDNN Python bindings (`hipdnn_frontend`) must be installed separately.
+### Development Installation
+
+```bash
+# For ROCm development
+pip install -r requirements-rocm.txt -r requirements-dev.txt
+pip install -e .
+
+# For CUDA development
+pip install -r requirements-cuda.txt -r requirements-dev.txt
+pip install -e .
+```
+
+**Note**: hipDNN Python bindings (`hipdnn_frontend`) must be installed separately for hipDNN benchmarking.
 
 ## Usage
 
@@ -137,24 +154,28 @@ source .venv/bin/activate
 # All non-GPU tests (no hipDNN required)
 pytest -m "not gpu"
 
-# All tests including GPU (requires hipDNN bindings)
-pytest
+# All tests including GPU (requires hipDNN bindings and ROCm libraries)
+LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH pytest
 
 # Only GPU tests
-pytest -m gpu
+LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH pytest -m gpu
 ```
 
 ### GPU Tests
 
-GPU tests require hipDNN Python bindings:
+GPU tests require hipDNN Python bindings and ROCm libraries:
 
 ```bash
 source .venv/bin/activate
 export CMAKE_PREFIX_PATH=/path/to/hipdnn/build/lib/cmake
 cd /path/to/hipdnn/python && pip install -e .
 cd -
-pytest
+
+# Run tests with ROCm libraries available
+LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH pytest
 ```
+
+**Note:** Set `LD_LIBRARY_PATH=/opt/rocm/lib` when running GPU tests to ensure hipdnn_frontend can load ROCm libraries.
 
 ## Limitations
 

@@ -1,0 +1,10 @@
+# ROCm/AMD GPU dependencies for dnn-benchmarking
+# Use this for hipDNN benchmarking on AMD GPUs
+
+# Base dependencies
+-r requirements.txt
+
+# CPU-only PyTorch for reference validation
+# Does NOT include ROCm to avoid conflicts with system ROCm libraries
+--index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0

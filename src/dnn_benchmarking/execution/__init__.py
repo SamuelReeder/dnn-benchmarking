@@ -3,8 +3,12 @@
 from .ab_runner import ABRunner, ABTestResult
 from .buffer_manager import BufferManager
 from .executor import Executor
-from .pytorch_buffer_manager import PyTorchCudaBufferManager
-from .pytorch_executor import PyTorchCudaExecutor, PyTorchExecutionError
+
+# PyTorch classes removed from top-level imports to avoid ROCm version conflicts.
+# Import directly from submodules when needed:
+#   from dnn_benchmarking.execution.pytorch_buffer_manager import PyTorchCudaBufferManager
+#   from dnn_benchmarking.execution.pytorch_executor import PyTorchCudaExecutor
+
 from .timing import (
     CudaGpuTimer,
     GpuTimer,
@@ -25,9 +29,6 @@ __all__ = [
     "GpuTimer",
     "GpuTimerInterface",
     "HipGpuTimer",
-    "PyTorchCudaBufferManager",
-    "PyTorchCudaExecutor",
-    "PyTorchExecutionError",
     "Timer",
     "create_gpu_timer",
     "get_available_backends",

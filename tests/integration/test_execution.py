@@ -114,14 +114,20 @@ class TestExecution:
             executor.warmup(handle, variant_pack)
 
             # Benchmark
-            timings = executor.benchmark(handle, variant_pack)
+            result = executor.benchmark(handle, variant_pack)
 
-            # Should have 5 timing values
-            assert len(timings) == 5
+            # Should have 5 E2E timing values
+            assert len(result.e2e_timings) == 5
 
-            # All timings should be positive
-            for t in timings:
+            # All E2E timings should be positive
+            for t in result.e2e_timings:
                 assert t > 0
+
+            # Should also have kernel timings (if HIP backend available)
+            if result.kernel_timings is not None:
+                assert len(result.kernel_timings) == 5
+                for t in result.kernel_timings:
+                    assert t > 0
 
             # Get output data (uid=0 for output tensor)
             output_data = buffer_manager.get_output_data(0)
