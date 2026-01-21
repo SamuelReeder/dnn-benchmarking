@@ -22,6 +22,10 @@ Examples:
   dnn-benchmark --graph ./graphs/conv1_fwd.json --warmup 20 --iters 200
   dnn-benchmark -g ./graphs/conv1_fwd.json -e 1
 
+PyTorch CUDA Backend (NVIDIA GPUs):
+  dnn-benchmark -g ./graph.json --backend pytorch
+  dnn-benchmark -g ./graph.json --backend pytorch -o pytorch_results.json
+
 Reference Validation:
   dnn-benchmark -g ./graph.json --validate pytorch
   dnn-benchmark -g ./graph.json --validate pytorch --validate-rtol 1e-3
@@ -75,6 +79,17 @@ A/B Testing:
         default=None,
         metavar="SEED",
         help="Random seed for reproducible input data (default: None)",
+    )
+
+    parser.add_argument(
+        "--backend",
+        "-b",
+        type=str,
+        choices=["hipdnn", "pytorch"],
+        default="hipdnn",
+        metavar="BACKEND",
+        help="Execution backend (default: hipdnn). "
+        "Options: hipdnn (AMD GPU via hipDNN), pytorch (NVIDIA GPU via PyTorch CUDA)",
     )
 
     # Output arguments

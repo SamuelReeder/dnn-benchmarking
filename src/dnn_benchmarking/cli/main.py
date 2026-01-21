@@ -229,6 +229,98 @@ def _run_reference_validation(
         return False
 
 
+def run_pytorch_benchmark(
+    config: BenchmarkConfig,
+    seed: Optional[int] = None,
+    output_path: Optional[Path] = None,
+    device: str = "cuda:0",
+) -> int:
+    """Run PyTorch CUDA benchmark workflow.
+
+    Args:
+        config: Benchmark configuration.
+        seed: Optional random seed for reproducibility.
+        output_path: Optional path to export benchmark results as JSON.
+        device: CUDA device to use.
+
+    Returns:
+        Exit code (0 for success, 1 for error).
+    """
+    from ..execution.pytorch_buffer_manager import PyTorchCudaBufferManager
+    from ..execution.pytorch_executor import PyTorchCudaExecutor, PyTorchExecutionError
+
+    reporter = Reporter()
+
+    try:
+        # Load graph (skip hipDNN-specific validation)
+        loader = GraphLoader()
+        graph_json = loader.load_json(config.graph_path)
+
+        graph_name = loader.get_graph_name(graph_json)
+        tensor_infos = loader.extract_tensor_info(graph_json)
+
+        # Print header
+        reporter.print_pytorch_header(config, graph_name, device)
+
+        # Check PyTorch CUDA availability
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                reporter.print_error(
+                    "PyTorch CUDA not available. "
+                    "Install PyTorch with CUDA support."
+                )
+                return 1
+        except ImportError:
+            reporter.print_error("PyTorch not available. Install with: pip install torch")
+            return 1
+
+        # Create executor
+        executor = PyTorchCudaExecutor(graph_json, config, device=device)
+        executor.prepare()
+
+        reporter.print_init_time(executor.init_time_ms)
+
+        # Allocate buffers
+        with PyTorchCudaBufferManager(tensor_infos, device=device) as buffer_manager:
+            buffer_manager.allocate_all()
+            buffer_manager.fill_inputs_random(seed=seed)
+            buffer_manager.zero_outputs()
+
+            tensors = buffer_manager.get_tensors()
+
+            # Run warmup
+            executor.warmup(tensors)
+
+            # Run benchmark
+            result = executor.benchmark(tensors, graph_name=graph_name)
+
+            # Calculate statistics
+            stats = CombinedBenchmarkStats.from_result(result)
+            reporter.print_combined_stats(stats)
+
+            # Export results if requested
+            if output_path:
+                result.save_json(str(output_path))
+                print(f"Results exported to: {output_path}")
+
+        reporter.print_footer()
+        return 0
+
+    except GraphLoadError as e:
+        reporter.print_error(f"Graph load error: {e}")
+        return 1
+
+    except PyTorchExecutionError as e:
+        reporter.print_error(f"PyTorch execution error: {e}")
+        return 1
+
+    except Exception as e:
+        reporter.print_error(f"Unexpected error: {e}")
+        return 1
+
+
 def run_ab_test(
     config: BenchmarkConfig, ab_config: ABTestConfig, seed: Optional[int] = None
 ) -> int:
@@ -344,6 +436,14 @@ def main() -> int:
             return 1
 
         return run_ab_test(config, ab_config, seed=args.seed)
+
+    # Route based on execution backend
+    if args.backend == "pytorch":
+        return run_pytorch_benchmark(
+            config,
+            seed=args.seed,
+            output_path=args.output,
+        )
 
     # Create validation config if validation is enabled
     validation_config = None

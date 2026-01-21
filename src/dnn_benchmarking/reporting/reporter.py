@@ -45,6 +45,26 @@ class Reporter:
         self._print_line("-")
         self._print("")
 
+    def print_pytorch_header(
+        self, config: BenchmarkConfig, graph_name: str, device: str
+    ) -> None:
+        """Print PyTorch CUDA benchmark configuration header.
+
+        Args:
+            config: Benchmark configuration.
+            graph_name: Name of the graph being benchmarked.
+            device: CUDA device being used.
+        """
+        self._print_line("=")
+        self._print(f"PyTorch CUDA Benchmark: {graph_name}")
+        self._print_line("=")
+        self._print(f"Graph:      {config.graph_path}")
+        self._print(f"Device:     {device}")
+        self._print(f"Warmup:     {config.warmup_iters} iterations")
+        self._print(f"Benchmark:  {config.benchmark_iters} iterations")
+        self._print_line("-")
+        self._print("")
+
     def print_init_time(self, init_time_ms: float) -> None:
         """Print initialization timing.
 

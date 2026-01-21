@@ -80,6 +80,7 @@ class BenchmarkMetadata:
         benchmark_iters: Number of benchmark iterations.
         engine_id: Engine ID used for execution.
         gpu_backend: GPU timer backend used ("hip", "cuda", or "").
+        execution_backend: Execution backend used ("hipdnn", "pytorch", or "").
         hostname: Machine hostname where benchmark was run.
     """
 
@@ -90,6 +91,7 @@ class BenchmarkMetadata:
     benchmark_iters: int = 0
     engine_id: int = 0
     gpu_backend: str = ""
+    execution_backend: str = ""
     hostname: str = field(default_factory=_get_hostname)
 
 
