@@ -95,14 +95,14 @@ class TestBenchmarkMetadata:
             warmup_iters=10,
             benchmark_iters=100,
             engine_id=1,
-            gpu_backend="hip",
+            gpu_backend="torch",
         )
         assert metadata.graph_name == "test_graph"
         assert metadata.graph_path == "/path/to/graph.json"
         assert metadata.warmup_iters == 10
         assert metadata.benchmark_iters == 100
         assert metadata.engine_id == 1
-        assert metadata.gpu_backend == "hip"
+        assert metadata.gpu_backend == "torch"
 
 
 class TestBenchmarkResult:
@@ -127,11 +127,11 @@ class TestBenchmarkResult:
 
     def test_gpu_backend_from_metadata(self) -> None:
         """Test gpu_backend property reads from metadata."""
-        metadata = BenchmarkMetadata(gpu_backend="cuda")
+        metadata = BenchmarkMetadata(gpu_backend="torch")
         result = BenchmarkResult(
             e2e_timings=[1.0], kernel_timings=[0.5], metadata=metadata
         )
-        assert result.gpu_backend == "cuda"
+        assert result.gpu_backend == "torch"
 
     def test_gpu_backend_empty_without_metadata(self) -> None:
         """Test gpu_backend is empty when no metadata."""
@@ -151,7 +151,7 @@ class TestBenchmarkResult:
     def test_to_dict_with_metadata(self) -> None:
         """Test to_dict includes metadata."""
         metadata = BenchmarkMetadata(
-            graph_name="test", gpu_backend="hip", benchmark_iters=100
+            graph_name="test", gpu_backend="torch", benchmark_iters=100
         )
         result = BenchmarkResult(
             e2e_timings=[1.0], kernel_timings=[0.5], metadata=metadata
@@ -159,7 +159,7 @@ class TestBenchmarkResult:
         data = result.to_dict()
         assert "metadata" in data
         assert data["metadata"]["graph_name"] == "test"
-        assert data["metadata"]["gpu_backend"] == "hip"
+        assert data["metadata"]["gpu_backend"] == "torch"
         assert data["metadata"]["benchmark_iters"] == 100
 
     def test_to_json(self) -> None:
@@ -195,7 +195,7 @@ class TestBenchmarkResult:
                 "warmup_iters": 10,
                 "benchmark_iters": 100,
                 "engine_id": 1,
-                "gpu_backend": "cuda",
+                "gpu_backend": "torch",
                 "hostname": "test-host",
                 "timestamp": "2026-01-20T12:00:00",
             },
@@ -203,7 +203,7 @@ class TestBenchmarkResult:
         result = BenchmarkResult.from_dict(data)
         assert result.metadata is not None
         assert result.metadata.graph_name == "test_graph"
-        assert result.metadata.gpu_backend == "cuda"
+        assert result.metadata.gpu_backend == "torch"
 
     def test_round_trip_serialization(self, tmp_path) -> None:
         """Test that results survive JSON round-trip."""
@@ -216,7 +216,7 @@ class TestBenchmarkResult:
                 warmup_iters=10,
                 benchmark_iters=100,
                 engine_id=1,
-                gpu_backend="hip",
+                gpu_backend="torch",
             ),
         )
 

@@ -123,6 +123,14 @@ def temp_json_file(tmp_path: Path, sample_conv_fwd_json: Dict[str, Any]) -> Path
 def skip_if_no_gpu():
     """Skip test if no AMD GPU available."""
     try:
+        import torch
+
+        if not torch.cuda.is_available():
+            pytest.skip("PyTorch GPU not available")
+    except ImportError as e:
+        pytest.skip(f"PyTorch not available: {e}")
+
+    try:
         import hipdnn_frontend as hipdnn
 
         hipdnn.Handle()

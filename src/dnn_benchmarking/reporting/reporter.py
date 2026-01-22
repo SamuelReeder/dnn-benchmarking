@@ -99,7 +99,7 @@ class Reporter:
             self._print("Kernel Execution Statistics:")
             self._print_stats_block(stats.kernel_stats)
         else:
-            self._print("Kernel Timing: Not available (HIP runtime not found)")
+            self._print("Kernel Timing: Not available (PyTorch GPU not available)")
         self._print("")
 
     def _print_stats_block(self, stats: BenchmarkStats) -> None:

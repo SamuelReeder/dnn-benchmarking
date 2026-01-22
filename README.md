@@ -4,7 +4,7 @@ Benchmarking and validation tool for hipDNN graphs.
 
 ## Overview
 
-This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, captures performance metrics, and soon will validate correctness against a reference baseline.
+This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, captures performance metrics (using PyTorch CUDA/ROCm events for kernel timing), and soon will validate correctness against a reference baseline.
 
 ## Requirements
 
@@ -12,6 +12,7 @@ This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, c
 - numpy
 - hipdnn_frontend (installed hipDNN Python bindings)
 - AMD GPU with ROCm + MIOpen plugin
+- PyTorch with CUDA or ROCm for GPU kernel timing (optional but recommended)
 
 ## Installation
 
@@ -22,13 +23,27 @@ This tool loads serialized hipDNN graphs, executes them via the MIOpen plugin, c
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install ROCm-compatible dependencies (CPU PyTorch to avoid ROCm conflicts)
+# Install ROCm-compatible dependencies (ROCm nightly PyTorch for GPU timing)
 pip install -r requirements-rocm.txt
 pip install -e .
 
 # Install hipDNN Python bindings (from your hipDNN build)
 cd /path/to/hipdnn/python && pip install -e . && cd -
 ```
+
+#### ROCm PyTorch nightlies (gfx90X-dcgpu staging index)
+
+If the default ROCm index does not have Python 3.12 wheels, install torch from the
+staging index explicitly:
+
+```bash
+source .venv/bin/activate
+python -m pip install --index-url https://rocm.nightlies.amd.com/v2-staging/gfx90X-dcgpu/ \
+  --pre --upgrade --force-reinstall torch
+```
+
+`torchaudio`/`torchvision` are optional and not required for benchmarking, but can
+be installed from the same index if needed.
 
 ### For CUDA/NVIDIA GPUs (PyTorch CUDA benchmarking)
 
@@ -55,6 +70,7 @@ pip install -e .
 ```
 
 **Note**: hipDNN Python bindings (`hipdnn_frontend`) must be installed separately for hipDNN benchmarking.
+**Note**: ROCm PyTorch is required for GPU kernel timing on AMD; validation remains CPU-only.
 
 ## Usage
 
@@ -100,6 +116,7 @@ python -m dnn_benchmarking --graph ./graphs/conv1_fwd.json \
 | `--iters`, `-i` | Number of benchmark iterations | 100 |
 | `--engine-id`, `-e` | Engine ID (1 = MIOpen) | 1 |
 | `--seed` | Random seed for reproducibility | None |
+| `--gpu-backend` | GPU kernel timer backend (`torch`, `auto`, `none`) | auto |
 
 #### A/B Testing Options
 
@@ -176,6 +193,32 @@ LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH pytest
 ```
 
 **Note:** Set `LD_LIBRARY_PATH=/opt/rocm/lib` when running GPU tests to ensure hipdnn_frontend can load ROCm libraries.
+
+#### Using ROCm libraries from the venv
+
+If you installed ROCm torch from the staging index, prefer the venv ROCm SDK
+libraries first to avoid LLVM symbol mismatches:
+
+```bash
+export LD_LIBRARY_PATH=$PWD/.venv/lib/python3.12/site-packages/_rocm_sdk_core/lib:\
+$PWD/.venv/lib/python3.12/site-packages/_rocm_sdk_libraries_gfx90X_dcgpu/lib:\
+$PWD/.venv/lib/python3.12/site-packages/triton/backends/amd/lib:\
+$LD_LIBRARY_PATH
+```
+
+You can make this venv-agnostic by resolving `site-packages` at runtime:
+
+```bash
+VENV_SITE=$(python - <<'PY'
+import site
+print(site.getsitepackages()[0])
+PY
+)
+export LD_LIBRARY_PATH=$VENV_SITE/_rocm_sdk_core/lib:\
+$VENV_SITE/_rocm_sdk_libraries_gfx90X_dcgpu/lib:\
+$VENV_SITE/triton/backends/amd/lib:\
+$LD_LIBRARY_PATH
+```
 
 ## Limitations
 

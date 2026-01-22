@@ -4,15 +4,33 @@ import time
 
 import pytest
 
+import dnn_benchmarking.execution.timing as timing_module
 from dnn_benchmarking.execution.timing import (
-    CudaGpuTimer,
+    GpuTimer,
     GpuTimerInterface,
-    HipGpuTimer,
     Timer,
+    TorchGpuTimer,
     create_gpu_timer,
     get_available_backends,
     is_gpu_timing_available,
 )
+
+
+class DummyTorchTimer(GpuTimerInterface):
+    """Minimal timer implementation for factory tests."""
+
+    @property
+    def backend_name(self) -> str:
+        return "torch"
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def elapsed_ms(self) -> float:
+        return 0.0
 
 
 class TestTimer:
@@ -79,7 +97,6 @@ class TestGpuTimerInterface:
 
     def test_interface_defines_required_methods(self) -> None:
         """Verify interface defines required abstract methods."""
-        # Check that abstract methods are defined
         assert hasattr(GpuTimerInterface, "start")
         assert hasattr(GpuTimerInterface, "stop")
         assert hasattr(GpuTimerInterface, "elapsed_ms")
@@ -99,14 +116,15 @@ class TestBackendDetection:
         backends = get_available_backends()
         assert isinstance(backends, list)
 
-    def test_get_available_backends_only_valid_values(self) -> None:
+    def test_get_available_backends_only_valid_values(self, monkeypatch) -> None:
         """Test that only valid backend names are returned."""
+        monkeypatch.setattr(timing_module, "_is_torch_available", lambda: True)
         backends = get_available_backends()
-        for backend in backends:
-            assert backend in ("hip", "cuda")
+        assert backends == ["torch"]
 
-    def test_is_gpu_timing_available_matches_backends(self) -> None:
+    def test_is_gpu_timing_available_matches_backends(self, monkeypatch) -> None:
         """Test consistency between availability functions."""
+        monkeypatch.setattr(timing_module, "_is_torch_available", lambda: True)
         backends = get_available_backends()
         assert is_gpu_timing_available() == (len(backends) > 0)
 
@@ -119,74 +137,30 @@ class TestFactoryFunction:
         with pytest.raises(ValueError, match="Unknown backend"):
             create_gpu_timer("invalid")  # type: ignore
 
-    def test_hip_backend_unavailable_raises_error(self) -> None:
-        """Test that requesting unavailable hip backend raises RuntimeError."""
-        if "hip" in get_available_backends():
-            pytest.skip("HIP backend is available")
-        with pytest.raises(RuntimeError, match="HIP runtime not available"):
-            create_gpu_timer("hip")
+    def test_torch_backend_unavailable_raises_error(self, monkeypatch) -> None:
+        """Test that requesting unavailable torch backend raises RuntimeError."""
+        monkeypatch.setattr(timing_module, "_is_torch_available", lambda: False)
+        with pytest.raises(RuntimeError, match="PyTorch GPU not available"):
+            create_gpu_timer("torch")
 
-    def test_cuda_backend_unavailable_raises_error(self) -> None:
-        """Test that requesting unavailable cuda backend raises RuntimeError."""
-        if "cuda" in get_available_backends():
-            pytest.skip("CUDA backend is available")
-        with pytest.raises(RuntimeError, match="PyTorch CUDA not available"):
-            create_gpu_timer("cuda")
-
-    def test_auto_no_backend_raises_error(self) -> None:
+    def test_auto_no_backend_raises_error(self, monkeypatch) -> None:
         """Test that auto with no backends raises RuntimeError."""
-        if is_gpu_timing_available():
-            pytest.skip("GPU backend is available")
-        with pytest.raises(RuntimeError, match="No GPU timing backend available"):
+        monkeypatch.setattr(timing_module, "_is_torch_available", lambda: False)
+        with pytest.raises(RuntimeError, match="PyTorch GPU not available"):
             create_gpu_timer("auto")
 
-    @pytest.mark.gpu
-    def test_auto_creates_timer_when_available(self) -> None:
-        """Test auto-detection creates a working timer."""
-        if not is_gpu_timing_available():
-            pytest.skip("No GPU backend available")
+    def test_auto_creates_timer_when_available(self, monkeypatch) -> None:
+        """Test auto-detection creates a timer when available."""
+        monkeypatch.setattr(timing_module, "_is_torch_available", lambda: True)
+        monkeypatch.setattr(timing_module, "TorchGpuTimer", DummyTorchTimer)
         timer = create_gpu_timer("auto")
         assert isinstance(timer, GpuTimerInterface)
-        assert timer.backend_name in ("hip", "cuda")
-
-    @pytest.mark.gpu
-    def test_hip_timer_implements_interface(self) -> None:
-        """Test that HipGpuTimer implements the interface."""
-        if "hip" not in get_available_backends():
-            pytest.skip("HIP backend not available")
-        timer = create_gpu_timer("hip")
-        assert isinstance(timer, GpuTimerInterface)
-        assert isinstance(timer, HipGpuTimer)
-        assert timer.backend_name == "hip"
-
-    @pytest.mark.gpu
-    def test_cuda_timer_implements_interface(self) -> None:
-        """Test that CudaGpuTimer implements the interface."""
-        if "cuda" not in get_available_backends():
-            pytest.skip("CUDA backend not available")
-        timer = create_gpu_timer("cuda")
-        assert isinstance(timer, GpuTimerInterface)
-        assert isinstance(timer, CudaGpuTimer)
-        assert timer.backend_name == "cuda"
+        assert timer.backend_name == "torch"
 
 
-class TestHipGpuTimerBackwardCompat:
+class TestTorchGpuTimerBackwardCompat:
     """Tests for backward compatibility aliases."""
 
-    @pytest.mark.gpu
-    def test_record_start_alias(self) -> None:
-        """Test record_start alias for start."""
-        if "hip" not in get_available_backends():
-            pytest.skip("HIP backend not available")
-        timer = HipGpuTimer()
-        # Should not raise
-        timer.record_start()
-        timer.record_stop()
-        _ = timer.synchronize_and_get_elapsed()
-
-    @pytest.mark.gpu
     def test_gputimer_alias(self) -> None:
-        """Test that GpuTimer is alias for HipGpuTimer."""
-        from dnn_benchmarking.execution.timing import GpuTimer
-
-        assert GpuTimer is HipGpuTimer
+        """Test that GpuTimer is alias for TorchGpuTimer."""
+        assert GpuTimer is TorchGpuTimer

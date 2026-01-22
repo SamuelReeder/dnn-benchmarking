@@ -23,7 +23,7 @@ def run_benchmark(
     seed: Optional[int] = None,
     validation_config: Optional[ValidationConfig] = None,
     output_path: Optional[Path] = None,
-    gpu_backend: Literal["hip", "cuda", "auto", "none"] = "auto",
+    gpu_backend: Literal["torch", "auto", "none"] = "auto",
 ) -> int:
     """Run the benchmark workflow.
 
@@ -32,7 +32,7 @@ def run_benchmark(
         seed: Optional random seed for reproducibility.
         validation_config: Optional validation configuration.
         output_path: Optional path to export benchmark results as JSON.
-        gpu_backend: GPU timer backend to use (hip, cuda, auto, none).
+        gpu_backend: GPU timer backend to use (torch, auto, none).
 
     Returns:
         Exit code (0 for success, 1 for error, 2 for validation failure).
@@ -268,8 +268,8 @@ def run_pytorch_benchmark(
 
             if not torch.cuda.is_available():
                 reporter.print_error(
-                    "PyTorch CUDA not available. "
-                    "Install PyTorch with CUDA support."
+                    "PyTorch GPU not available. "
+                    "Install PyTorch with CUDA or ROCm support."
                 )
                 return 1
         except ImportError:

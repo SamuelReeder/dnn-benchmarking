@@ -5,12 +5,7 @@ from typing import Any, Dict, List, Literal, Optional
 from ..common.exceptions import ExecutionError
 from ..config.benchmark_config import BenchmarkConfig
 from ..reporting.statistics import BenchmarkMetadata, BenchmarkResult
-from .timing import (
-    GpuTimerInterface,
-    Timer,
-    create_gpu_timer,
-    is_gpu_timing_available,
-)
+from .timing import GpuTimerInterface, Timer, create_gpu_timer
 
 
 class Executor:
@@ -28,7 +23,7 @@ class Executor:
         self,
         graph_json_str: str,
         config: BenchmarkConfig,
-        gpu_backend: Optional[Literal["hip", "cuda", "auto", "none"]] = "auto",
+        gpu_backend: Optional[Literal["torch", "auto", "none"]] = "auto",
     ) -> None:
         """Initialize executor with graph JSON and configuration.
 
@@ -36,9 +31,8 @@ class Executor:
             graph_json_str: The graph as a JSON string.
             config: Benchmark configuration.
             gpu_backend: GPU timer backend to use:
-                - "hip": Force HIP backend (AMD GPUs)
-                - "cuda": Force CUDA/PyTorch backend (NVIDIA GPUs)
-                - "auto": Auto-detect (prefers HIP if both available)
+                - "torch": Force PyTorch backend (CUDA or ROCm)
+                - "auto": Auto-detect (uses PyTorch if available)
                 - "none": Disable GPU timing, use only E2E timing
         """
         self._graph_json_str = graph_json_str
@@ -168,18 +162,30 @@ class Executor:
         kernel_timings: Optional[List[float]] = None
         gpu_timer: Optional[GpuTimerInterface] = None
         backend_name: str = ""
+        torch_sync = None
 
         # Create GPU timer if requested and available
-        if self._gpu_backend != "none" and is_gpu_timing_available():
+        if self._gpu_backend != "none":
             try:
                 gpu_timer = create_gpu_timer(
-                    self._gpu_backend if self._gpu_backend != "none" else "auto"
+                    "torch" if self._gpu_backend == "torch" else "auto"
                 )
-                kernel_timings = []
-                backend_name = gpu_timer.backend_name
-            except RuntimeError:
-                # GPU timing not available for requested backend, continue without
-                pass
+            except RuntimeError as e:
+                raise ExecutionError(str(e)) from e
+            kernel_timings = []
+            backend_name = gpu_timer.backend_name
+
+            import torch
+
+            torch_sync = torch.cuda.synchronize
+        else:
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    torch_sync = torch.cuda.synchronize
+            except ImportError:
+                torch_sync = None
 
         for _ in range(self._config.benchmark_iters):
             if gpu_timer:
@@ -191,9 +197,12 @@ class Executor:
                     raise ExecutionError(
                         f"Benchmark execution failed: {result.get_message()}"
                     )
+                if gpu_timer:
+                    gpu_timer.stop()
+                if torch_sync:
+                    torch_sync()
 
             if gpu_timer and kernel_timings is not None:
-                gpu_timer.stop()
                 kernel_timings.append(gpu_timer.elapsed_ms())
 
             e2e_timings.append(t.elapsed_ms)

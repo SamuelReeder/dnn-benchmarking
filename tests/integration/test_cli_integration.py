@@ -66,6 +66,14 @@ class TestCLIIntegration:
         if not sample_graph_path.exists():
             pytest.skip(f"Sample graph not found: {sample_graph_path}")
 
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                pytest.skip("PyTorch GPU not available")
+        except ImportError as e:
+            pytest.skip(f"PyTorch not available: {e}")
+
         # Check if hipdnn is available
         try:
             import hipdnn_frontend
@@ -133,6 +141,14 @@ class TestCLIIntegration:
 
         if not sample_path.exists():
             pytest.skip(f"Sample graph not found: {sample_path}")
+
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                pytest.skip("PyTorch GPU not available")
+        except ImportError as e:
+            pytest.skip(f"PyTorch not available: {e}")
 
         # Check if hipdnn is available
         try:

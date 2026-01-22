@@ -21,6 +21,14 @@ class TestExecution:
     def hipdnn(self):
         """Get hipdnn_frontend module or skip if not available."""
         try:
+            import torch
+
+            if not torch.cuda.is_available():
+                pytest.skip("PyTorch GPU not available")
+        except ImportError as e:
+            pytest.skip(f"PyTorch not available: {e}")
+
+        try:
             import hipdnn_frontend
 
             # Test that we can create a handle (requires GPU)
@@ -374,6 +382,14 @@ class TestPyTorchReferenceValidation:
     @pytest.fixture
     def hipdnn(self):
         """Get hipdnn_frontend module or skip if not available."""
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                pytest.skip("PyTorch GPU not available")
+        except ImportError as e:
+            pytest.skip(f"PyTorch not available: {e}")
+
         try:
             import hipdnn_frontend
 

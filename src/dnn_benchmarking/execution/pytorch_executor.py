@@ -1,4 +1,4 @@
-"""PyTorch CUDA executor for graph benchmarking."""
+"""PyTorch GPU executor for graph benchmarking."""
 
 from typing import Any, Dict, List, Optional
 
@@ -7,7 +7,7 @@ import torch
 from ..config.benchmark_config import BenchmarkConfig
 from ..reporting.statistics import BenchmarkMetadata, BenchmarkResult
 from . import pytorch_ops
-from .timing import CudaGpuTimer, Timer, _is_cuda_available
+from .timing import Timer, TorchGpuTimer, _is_torch_available
 
 
 class PyTorchExecutionError(Exception):
@@ -17,12 +17,12 @@ class PyTorchExecutionError(Exception):
 
 
 class PyTorchCudaExecutor:
-    """Executes hipDNN-format graphs using PyTorch on CUDA.
+    """Executes hipDNN-format graphs using PyTorch on GPU.
 
     This class handles:
     - Validating graph operations are supported
     - Running warmup iterations
-    - Running timed benchmark iterations with CudaGpuTimer
+    - Running timed benchmark iterations with TorchGpuTimer
     - Returning BenchmarkResult with E2E and kernel timings
     """
 
@@ -37,14 +37,14 @@ class PyTorchCudaExecutor:
         Args:
             graph_json: The graph as a parsed JSON dictionary.
             config: Benchmark configuration.
-            device: CUDA device to use (e.g., "cuda:0").
+            device: CUDA/ROCm device to use (e.g., "cuda:0").
 
         Raises:
-            PyTorchExecutionError: If PyTorch CUDA is not available.
+            PyTorchExecutionError: If PyTorch GPU is not available.
         """
-        if not _is_cuda_available():
+        if not _is_torch_available():
             raise PyTorchExecutionError(
-                "PyTorch CUDA not available. Install PyTorch with CUDA support."
+                "PyTorch GPU not available. Install PyTorch with CUDA or ROCm support."
             )
 
         self._graph_json = graph_json
@@ -68,7 +68,7 @@ class PyTorchCudaExecutor:
                     f"Supported: {list(pytorch_ops.get_supported_operations())}"
                 )
 
-            # Warm up CUDA context if needed
+            # Warm up CUDA/ROCm context if needed
             torch.cuda.init()
 
             self._prepared = True
@@ -115,7 +115,7 @@ class PyTorchCudaExecutor:
 
         e2e_timings: List[float] = []
         kernel_timings: List[float] = []
-        gpu_timer = CudaGpuTimer()
+        gpu_timer = TorchGpuTimer()
 
         for _ in range(self._config.benchmark_iters):
             gpu_timer.start()
@@ -135,7 +135,7 @@ class PyTorchCudaExecutor:
             warmup_iters=self._config.warmup_iters,
             benchmark_iters=self._config.benchmark_iters,
             engine_id=self._config.engine_id,
-            gpu_backend="cuda",
+            gpu_backend="torch",
             execution_backend="pytorch",
         )
 
@@ -166,5 +166,5 @@ class PyTorchCudaExecutor:
 
     @property
     def device(self) -> torch.device:
-        """Get the CUDA device being used."""
+        """Get the CUDA/ROCm device being used."""
         return self._device

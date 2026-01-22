@@ -22,7 +22,7 @@ Examples:
   dnn-benchmark --graph ./graphs/conv1_fwd.json --warmup 20 --iters 200
   dnn-benchmark -g ./graphs/conv1_fwd.json -e 1
 
-PyTorch CUDA Backend (NVIDIA GPUs):
+PyTorch Backend (GPU via PyTorch):
   dnn-benchmark -g ./graph.json --backend pytorch
   dnn-benchmark -g ./graph.json --backend pytorch -o pytorch_results.json
 
@@ -89,7 +89,7 @@ A/B Testing:
         default="hipdnn",
         metavar="BACKEND",
         help="Execution backend (default: hipdnn). "
-        "Options: hipdnn (AMD GPU via hipDNN), pytorch (NVIDIA GPU via PyTorch CUDA)",
+        "Options: hipdnn (AMD GPU via hipDNN), pytorch (GPU via PyTorch)",
     )
 
     # Output arguments
@@ -105,11 +105,11 @@ A/B Testing:
     output_group.add_argument(
         "--gpu-backend",
         type=str,
-        choices=["hip", "cuda", "auto", "none"],
+        choices=["torch", "auto", "none"],
         default="auto",
         metavar="BACKEND",
         help="GPU timer backend (default: auto). "
-        "Options: hip (AMD), cuda (NVIDIA/PyTorch), auto, none (E2E only)",
+        "Options: torch (PyTorch CUDA/ROCm), auto, none (E2E only)",
     )
 
     # A/B Testing arguments

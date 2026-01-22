@@ -10,11 +10,10 @@ from .executor import Executor
 #   from dnn_benchmarking.execution.pytorch_executor import PyTorchCudaExecutor
 
 from .timing import (
-    CudaGpuTimer,
     GpuTimer,
     GpuTimerInterface,
-    HipGpuTimer,
     Timer,
+    TorchGpuTimer,
     create_gpu_timer,
     get_available_backends,
     is_gpu_timing_available,
@@ -24,12 +23,11 @@ __all__ = [
     "ABRunner",
     "ABTestResult",
     "BufferManager",
-    "CudaGpuTimer",
     "Executor",
     "GpuTimer",
     "GpuTimerInterface",
-    "HipGpuTimer",
     "Timer",
+    "TorchGpuTimer",
     "create_gpu_timer",
     "get_available_backends",
     "is_gpu_timing_available",
