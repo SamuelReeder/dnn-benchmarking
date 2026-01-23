@@ -6,6 +6,29 @@ from typing import Any, Dict
 
 import pytest
 
+from dnn_benchmarking.execution.timing import GpuTimerInterface
+
+
+class DummyTorchTimer(GpuTimerInterface):
+    """Minimal timer implementation for factory tests.
+
+    This is a test fixture that can be used to mock GPU timing
+    without requiring actual GPU hardware.
+    """
+
+    @property
+    def backend_name(self) -> str:
+        return "torch"
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def elapsed_ms(self) -> float:
+        return 0.0
+
 
 @pytest.fixture
 def sample_conv_fwd_json() -> Dict[str, Any]:

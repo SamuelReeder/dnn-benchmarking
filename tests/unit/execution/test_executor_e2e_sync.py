@@ -54,9 +54,13 @@ def _make_executor(gpu_backend: str) -> executor_module.Executor:
 
 
 def test_sync_called_inside_timed_region(monkeypatch) -> None:
-    """Ensure torch.cuda.synchronize is invoked within the Timer context."""
+    """Ensure GPU timer elapsed_ms (which syncs) is invoked within the Timer context.
+
+    The elapsed_ms() method internally calls synchronize on the stop event,
+    so calling it inside the Timer ensures E2E timing includes sync time.
+    """
     in_timer = {"value": False}
-    sync_called_in_timer = {"value": False}
+    elapsed_called_in_timer = {"value": False}
 
     class FakeTimer:
         def __enter__(self) -> "FakeTimer":
@@ -70,20 +74,32 @@ def test_sync_called_inside_timed_region(monkeypatch) -> None:
         def elapsed_ms(self) -> float:
             return 1.0
 
-    def sync() -> None:
-        sync_called_in_timer["value"] = in_timer["value"]
+    class TrackingGpuTimer(GpuTimerInterface):
+        """GPU timer that tracks when elapsed_ms is called."""
 
-    dummy_cuda = types.SimpleNamespace(is_available=lambda: True, synchronize=sync)
-    dummy_torch = types.SimpleNamespace(cuda=dummy_cuda)
+        @property
+        def backend_name(self) -> str:
+            return "torch"
 
-    monkeypatch.setitem(sys.modules, "torch", dummy_torch)
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+        def elapsed_ms(self) -> float:
+            elapsed_called_in_timer["value"] = in_timer["value"]
+            return 1.0
+
     monkeypatch.setattr(executor_module, "Timer", FakeTimer)
-    monkeypatch.setattr(executor_module, "create_gpu_timer", lambda backend: DummyTorchTimer())
+    monkeypatch.setattr(executor_module, "create_gpu_timer", lambda backend: TrackingGpuTimer())
 
     executor = _make_executor("torch")
     result = executor.benchmark(handle=None, variant_pack={})
 
-    assert sync_called_in_timer["value"] is True
+    # elapsed_ms() should be called inside the timer context
+    # (this ensures E2E timing includes the sync that elapsed_ms performs)
+    assert elapsed_called_in_timer["value"] is True
     assert result.kernel_timings is not None
     assert result.metadata is not None
     assert result.metadata.gpu_backend == "torch"

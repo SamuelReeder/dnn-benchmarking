@@ -174,11 +174,8 @@ class Executor:
                 raise ExecutionError(str(e)) from e
             kernel_timings = []
             backend_name = gpu_timer.backend_name
-
-            import torch
-
-            torch_sync = torch.cuda.synchronize
         else:
+            # No GPU timer - need explicit sync for E2E timing
             try:
                 import torch
 
@@ -199,11 +196,11 @@ class Executor:
                     )
                 if gpu_timer:
                     gpu_timer.stop()
-                if torch_sync:
+                    # elapsed_ms() syncs on the stop event, so E2E includes sync time
+                    kernel_timings.append(gpu_timer.elapsed_ms())
+                elif torch_sync:
+                    # No GPU timer - explicit sync for accurate E2E
                     torch_sync()
-
-            if gpu_timer and kernel_timings is not None:
-                kernel_timings.append(gpu_timer.elapsed_ms())
 
             e2e_timings.append(t.elapsed_ms)
 
@@ -215,6 +212,7 @@ class Executor:
             benchmark_iters=self._config.benchmark_iters,
             engine_id=self._config.engine_id,
             gpu_backend=backend_name,
+            execution_backend="hipdnn",
         )
 
         return BenchmarkResult(

@@ -15,22 +15,8 @@ from dnn_benchmarking.execution.timing import (
     is_gpu_timing_available,
 )
 
-
-class DummyTorchTimer(GpuTimerInterface):
-    """Minimal timer implementation for factory tests."""
-
-    @property
-    def backend_name(self) -> str:
-        return "torch"
-
-    def start(self) -> None:
-        pass
-
-    def stop(self) -> None:
-        pass
-
-    def elapsed_ms(self) -> float:
-        return 0.0
+# Import shared test fixture
+from tests.conftest import DummyTorchTimer
 
 
 class TestTimer:
@@ -164,3 +150,78 @@ class TestTorchGpuTimerBackwardCompat:
     def test_gputimer_alias(self) -> None:
         """Test that GpuTimer is alias for TorchGpuTimer."""
         assert GpuTimer is TorchGpuTimer
+
+
+class TestGpuTimerContextManager:
+    """Tests for GPU timer context manager behavior."""
+
+    def test_context_manager_calls_start_and_stop(self) -> None:
+        """Test that context manager calls start on enter and stop on exit."""
+        call_order = []
+
+        class TrackingTimer(GpuTimerInterface):
+            @property
+            def backend_name(self) -> str:
+                return "tracking"
+
+            def start(self) -> None:
+                call_order.append("start")
+
+            def stop(self) -> None:
+                call_order.append("stop")
+
+            def elapsed_ms(self) -> float:
+                return 1.0
+
+        timer = TrackingTimer()
+        with timer:
+            call_order.append("inside")
+
+        assert call_order == ["start", "inside", "stop"]
+
+    def test_context_manager_stop_called_on_exception(self) -> None:
+        """Test that stop is called even when exception occurs."""
+        stop_called = False
+
+        class ExceptionTimer(GpuTimerInterface):
+            @property
+            def backend_name(self) -> str:
+                return "exception"
+
+            def start(self) -> None:
+                pass
+
+            def stop(self) -> None:
+                nonlocal stop_called
+                stop_called = True
+
+            def elapsed_ms(self) -> float:
+                return 1.0
+
+        timer = ExceptionTimer()
+        with pytest.raises(RuntimeError):
+            with timer:
+                raise RuntimeError("test error")
+
+        assert stop_called is True
+
+
+class TestTimingSanity:
+    """Sanity tests for timing behavior."""
+
+    def test_dummy_timer_implements_interface(self) -> None:
+        """Test that DummyTorchTimer properly implements the interface."""
+        timer = DummyTorchTimer()
+
+        # Verify all interface methods work
+        assert timer.backend_name == "torch"
+        timer.start()
+        timer.stop()
+        assert timer.elapsed_ms() == 0.0
+
+    def test_dummy_timer_context_manager(self) -> None:
+        """Test that DummyTorchTimer works as context manager."""
+        timer = DummyTorchTimer()
+        with timer:
+            pass
+        assert timer.elapsed_ms() == 0.0

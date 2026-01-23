@@ -4,7 +4,7 @@ These handlers execute on the device of the input tensors (CPU or CUDA).
 Used by both PyTorchReferenceProvider (CPU) and PyTorchCudaExecutor (CUDA).
 """
 
-from typing import Any, Callable, Dict, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import torch
 import torch.nn.functional as F
@@ -33,7 +33,7 @@ def register_handler(op_type: str) -> Callable[[OpHandler], OpHandler]:
     return decorator
 
 
-def get_handler(op_type: str) -> OpHandler | None:
+def get_handler(op_type: str) -> Optional[OpHandler]:
     """Get handler for operation type.
 
     Args:
@@ -69,7 +69,7 @@ def supports_graph(graph_json: Dict[str, Any]) -> bool:
     return True
 
 
-def get_unsupported_operations(graph_json: Dict[str, Any]) -> list[str]:
+def get_unsupported_operations(graph_json: Dict[str, Any]) -> List[str]:
     """Get list of unsupported operation types in graph.
 
     Args:
