@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from typing import TextIO
+from typing import Any, Optional, TextIO
 
 from ..config.benchmark_config import ABTestConfig, BenchmarkConfig
 from .statistics import BenchmarkStats, CombinedBenchmarkStats
@@ -248,6 +248,87 @@ class Reporter:
 
         self._print("")
 
+    def print_ab_combined_stats(
+        self,
+        stats_a: CombinedBenchmarkStats,
+        stats_b: CombinedBenchmarkStats,
+        init_time_a_ms: float,
+        init_time_b_ms: float,
+    ) -> None:
+        """Print side-by-side comparison of A vs B with both E2E and kernel stats.
+
+        Args:
+            stats_a: Combined statistics for configuration A.
+            stats_b: Combined statistics for configuration B.
+            init_time_a_ms: Init time for A in milliseconds.
+            init_time_b_ms: Init time for B in milliseconds.
+        """
+        # E2E Stats section
+        self._print("E2E Execution Statistics:")
+        self._print(f"{'':20} {'A':>15} {'B':>15}")
+        self._print_line("-")
+
+        # Init times
+        self._print(
+            f"{'Init Time:':20} {init_time_a_ms:>12.2f} ms {init_time_b_ms:>12.2f} ms"
+        )
+
+        # E2E execution stats
+        self._print_ab_stats_block(stats_a.e2e_stats, stats_b.e2e_stats)
+        self._print("")
+
+        # Kernel Stats section (if available)
+        if stats_a.kernel_stats and stats_b.kernel_stats:
+            self._print("Kernel Execution Statistics:")
+            self._print(f"{'':20} {'A':>15} {'B':>15}")
+            self._print_line("-")
+            self._print_ab_stats_block(stats_a.kernel_stats, stats_b.kernel_stats)
+            self._print("")
+
+            # Calculate kernel speedup
+            ka, kb = stats_a.kernel_stats, stats_b.kernel_stats
+            if ka.mean_ms > 0 and kb.mean_ms > 0:
+                if ka.mean_ms > kb.mean_ms:
+                    speedup = (ka.mean_ms - kb.mean_ms) / ka.mean_ms * 100
+                    self._print(f"Kernel Speedup:     B is {speedup:.1f}% faster")
+                elif kb.mean_ms > ka.mean_ms:
+                    speedup = (kb.mean_ms - ka.mean_ms) / kb.mean_ms * 100
+                    self._print(f"Kernel Speedup:     A is {speedup:.1f}% faster")
+                else:
+                    self._print("Kernel Speedup:     A and B are equal")
+                self._print("")
+        else:
+            self._print("Kernel Timing: Not available")
+            self._print("")
+
+    def _print_ab_stats_block(
+        self, stats_a: BenchmarkStats, stats_b: BenchmarkStats
+    ) -> None:
+        """Print a side-by-side statistics block for A/B comparison.
+
+        Args:
+            stats_a: Statistics for configuration A.
+            stats_b: Statistics for configuration B.
+        """
+        self._print(
+            f"{'Mean:':20} {stats_a.mean_ms:>12.3f} ms {stats_b.mean_ms:>12.3f} ms"
+        )
+        self._print(
+            f"{'Std Dev:':20} {stats_a.std_ms:>12.3f} ms {stats_b.std_ms:>12.3f} ms"
+        )
+        self._print(
+            f"{'Min:':20} {stats_a.min_ms:>12.3f} ms {stats_b.min_ms:>12.3f} ms"
+        )
+        self._print(
+            f"{'Max:':20} {stats_a.max_ms:>12.3f} ms {stats_b.max_ms:>12.3f} ms"
+        )
+        self._print(
+            f"{'P95:':20} {stats_a.p95_ms:>12.3f} ms {stats_b.p95_ms:>12.3f} ms"
+        )
+        self._print(
+            f"{'P99:':20} {stats_a.p99_ms:>12.3f} ms {stats_b.p99_ms:>12.3f} ms"
+        )
+
     def print_ab_comparison(
         self, passed: bool, max_abs_diff: float, max_rel_diff: float, rtol: float, atol: float
     ) -> None:
@@ -266,6 +347,43 @@ class Reporter:
         if not passed:
             self._print(f"  Max abs diff: {max_abs_diff:.2e}")
             self._print(f"  Max rel diff: {max_rel_diff:.2e}")
+
+    def print_ab_validation(
+        self,
+        validation_a: Optional[Any],
+        validation_b: Optional[Any],
+        rtol: float,
+        atol: float,
+    ) -> None:
+        """Print reference validation results for A/B test.
+
+        Args:
+            validation_a: ValidationResult for configuration A, or None.
+            validation_b: ValidationResult for configuration B, or None.
+            rtol: Relative tolerance used.
+            atol: Absolute tolerance used.
+        """
+        if validation_a is None and validation_b is None:
+            return
+
+        self._print("")
+        self._print("Reference Validation:")
+
+        if validation_a is not None:
+            status_a = "PASSED" if validation_a.passed else "FAILED"
+            self._print(f"  Config A vs {validation_a.provider_name}: {status_a}")
+            if not validation_a.passed:
+                self._print(f"    Max abs diff: {validation_a.max_abs_diff:.2e}")
+                self._print(f"    Max rel diff: {validation_a.max_rel_diff:.2e}")
+
+        if validation_b is not None:
+            status_b = "PASSED" if validation_b.passed else "FAILED"
+            self._print(f"  Config B vs {validation_b.provider_name}: {status_b}")
+            if not validation_b.passed:
+                self._print(f"    Max abs diff: {validation_b.max_abs_diff:.2e}")
+                self._print(f"    Max rel diff: {validation_b.max_rel_diff:.2e}")
+
+        self._print(f"  (rtol={rtol:.0e}, atol={atol:.0e})")
 
     # Reference Validation Methods
 

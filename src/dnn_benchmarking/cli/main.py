@@ -104,11 +104,6 @@ def run_benchmark(
                     validation_config=validation_config,
                     reporter=reporter,
                 )
-            else:
-                # Stubbed validation
-                validator = Validator()
-                passed, message = validator.validate_stub()
-                reporter.print_validation(passed, message)
 
         reporter.print_footer()
         return 0 if validation_passed else 2
@@ -322,7 +317,11 @@ def run_pytorch_benchmark(
 
 
 def run_ab_test(
-    config: BenchmarkConfig, ab_config: ABTestConfig, seed: Optional[int] = None
+    config: BenchmarkConfig,
+    ab_config: ABTestConfig,
+    seed: Optional[int] = None,
+    gpu_backend: Literal["torch", "auto", "none"] = "auto",
+    validation_config: Optional[ValidationConfig] = None,
 ) -> int:
     """Run A/B comparison workflow.
 
@@ -330,6 +329,8 @@ def run_ab_test(
         config: Benchmark configuration.
         ab_config: A/B test configuration.
         seed: Optional random seed for reproducibility.
+        gpu_backend: GPU timer backend to use (torch, auto, none).
+        validation_config: Optional validation configuration for reference checking.
 
     Returns:
         Exit code (0 for success, 1 for error, 2 for comparison failure).
@@ -351,13 +352,23 @@ def run_ab_test(
         reporter.print_ab_header(config, ab_config, graph_name)
 
         # Run A/B comparison
-        runner = ABRunner(graph_json, config, ab_config)
+        runner = ABRunner(
+            graph_json,
+            config,
+            ab_config,
+            gpu_backend=gpu_backend,
+            validation_config=validation_config,
+        )
         result = runner.run(seed=seed)
 
-        # Print results
-        reporter.print_ab_stats(
-            result.stats_a,
-            result.stats_b,
+        # Compute combined stats from results
+        stats_a = CombinedBenchmarkStats.from_result(result.result_a)
+        stats_b = CombinedBenchmarkStats.from_result(result.result_b)
+
+        # Print results with both E2E and kernel stats
+        reporter.print_ab_combined_stats(
+            stats_a,
+            stats_b,
             result.init_time_a_ms,
             result.init_time_b_ms,
         )
@@ -370,10 +381,26 @@ def run_ab_test(
             ab_config.atol,
         )
 
+        # Print validation results if available
+        if validation_config is not None and validation_config.enabled:
+            reporter.print_ab_validation(
+                result.validation_a,
+                result.validation_b,
+                validation_config.rtol,
+                validation_config.atol,
+            )
+
         reporter.print_footer()
 
-        # Return 0 for pass, 2 for comparison failure
-        return 0 if result.passed else 2
+        # Check validation results
+        validation_passed = True
+        if result.validation_a is not None and not result.validation_a.passed:
+            validation_passed = False
+        if result.validation_b is not None and not result.validation_b.passed:
+            validation_passed = False
+
+        # Return 0 for pass, 2 for comparison or validation failure
+        return 0 if (result.passed and validation_passed) else 2
 
     except GraphLoadError as e:
         reporter.print_error(f"Graph load error: {e}")
@@ -435,7 +462,26 @@ def main() -> int:
             print(f"A/B configuration error: {e}", file=sys.stderr)
             return 1
 
-        return run_ab_test(config, ab_config, seed=args.seed)
+        # Create validation config if validation is enabled for A/B test
+        ab_validation_config = None
+        if args.validate != "none":
+            try:
+                ab_validation_config = ValidationConfig(
+                    provider=args.validate,
+                    rtol=args.validate_rtol,
+                    atol=args.validate_atol,
+                )
+            except ValueError as e:
+                print(f"Validation configuration error: {e}", file=sys.stderr)
+                return 1
+
+        return run_ab_test(
+            config,
+            ab_config,
+            seed=args.seed,
+            gpu_backend=args.gpu_backend,
+            validation_config=ab_validation_config,
+        )
 
     # Route based on execution backend
     if args.backend == "pytorch":
